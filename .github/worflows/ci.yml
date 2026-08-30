@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    uses: app-volta/DevOps/.github/workflows/reusable-validate-pr.yml@v1
+
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: volta
+          POSTGRES_PASSWORD: volta
+          POSTGRES_DB: volta
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U volta"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Instalar cliente psql
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Executar scripts na ordem numérica
+        env:
+          PGPASSWORD: volta
+        run: |
+          shopt -s nullglob
+          SCRIPTS=(scripts/[0-9][0-9]-*.sql)
+
+          if [ ${#SCRIPTS[@]} -eq 0 ]; then
+            echo "::error::Nenhum script encontrado em scripts/ com prefixo numérico (ex.- 01-schema.sql)."
+            exit 1
+          fi
+
+          for script in "${SCRIPTS[@]}"; do
+            echo "▶ Executando: $script"
+            psql -h localhost -U volta -d volta -v ON_ERROR_STOP=1 -f "$script"
+          done
+
+          echo "Todos os scripts executaram sem erro."
+
+      - name: Verificações de sanidade
+        env:
+          PGPASSWORD: volta
+        run: |
+          echo "### Tabelas criadas"
+          psql -h localhost -U volta -d volta -c "\dt"
+
+          echo "### Contagem de linhas por tabela"
+          psql -h localhost -U volta -d volta -t -c "
+            SELECT
+              table_name,
+              (xpath('/r/c/text()',
+                query_to_xml(format('SELECT count(*) AS c FROM %I', table_name), false, true, '')
+              ))[1]::text::int AS linhas
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name;
+          "
