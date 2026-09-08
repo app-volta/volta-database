@@ -1,5 +1,5 @@
 -- ============================================================
--- VOLTA - PostgreSQL - CREATES e ALTERS/CONSTRAINTS
+-- VOLTA - PostgreSQL - CREATES e  ALTERS/CONSTRAINTS
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -373,6 +373,3 @@ ALTER COLUMN cnpj TYPE VARCHAR(18);
 
 ALTER TABLE cooperative
 ALTER COLUMN cnpj TYPE VARCHAR(18);
-
-ALTER TABLE company
-ADD COLUMN is_available BOOLEAN NOT NULL DEFAULT TRUE;
