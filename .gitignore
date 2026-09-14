@@ -1,0 +1,49 @@
+# =========================
+# VOLTA Database
+# =========================
+
+# Backups do PostgreSQL
+backup/dumps/
+*.dump
+*.backup
+
+# Variáveis de ambiente / credenciais
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.swp
+*~
+
+# VS Code
+.vscode/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Java / Maven / Gradle
+target/
+build/
+.gradle/
