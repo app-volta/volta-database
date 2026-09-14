@@ -373,3 +373,31 @@ ALTER COLUMN cnpj TYPE VARCHAR(18);
 
 ALTER TABLE cooperative
 ALTER COLUMN cnpj TYPE VARCHAR(18);
+
+ALTER TABLE company
+ADD COLUMN is_available BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE users
+ALTER COLUMN company_id DROP NOT NULL;
+
+ALTER TABLE users
+ADD COLUMN cooperative_id UUID;
+
+ALTER TABLE users
+ADD CONSTRAINT fk_users_cooperative
+FOREIGN KEY (cooperative_id)
+REFERENCES cooperative(id);
+
+ALTER TABLE users
+ADD CONSTRAINT chk_users_organization
+CHECK (
+    (
+        company_id IS NOT NULL
+        AND cooperative_id IS NULL
+    )
+    OR
+    (
+        company_id IS NULL
+        AND cooperative_id IS NOT NULL
+    )
+);
