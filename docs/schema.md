@@ -4,9 +4,9 @@
 
 O banco relacional do projeto **VOLTA** foi definido para PostgreSQL e organiza dados de empresas, usuários, áreas, ocorrências de resíduos, análises de IA, cooperativas, coletas, avaliações, conversas, notificações e indicadores ESG.
 
-O modelo de domínio contém **17 tabelas**. Os relacionamentos são implementados por chaves estrangeiras e as principais regras de domínio presentes em `scripts/01-schema.sql` são aplicadas por `NOT NULL`, `UNIQUE`, valores padrão e restrições `CHECK`. O script `scripts/13-migration_control.sql` acrescenta três tabelas operacionais de controle (`migration_run`, `migration_id_map` e `migration_error`); elas não fazem parte das 17 entidades de negócio.
+O esquema contém **17 tabelas**. Os relacionamentos são implementados por chaves estrangeiras e as principais regras de domínio presentes no próprio `schema.sql` são aplicadas por `NOT NULL`, `UNIQUE`, valores padrão e restrições `CHECK`.
 
-> Esta documentação descreve somente o que está declarado em `scripts/01-schema.sql`. Campos textuais como `status`, `priority`, `type`, níveis e categorias não possuem enumeração ou `CHECK` de valores no esquema atual.
+> Esta documentação descreve somente o que está declarado no `schema.sql`. Campos textuais como `status`, `priority`, `type`, níveis e categorias não possuem enumeração ou `CHECK` de valores no esquema atual.
 
 ## PostgreSQL, `pgcrypto` e UUID
 
@@ -438,11 +438,3 @@ Assim, o tipo efetivo após a execução completa do arquivo é `VARCHAR(18)` na
 ## Resumo
 
 O esquema do VOLTA centraliza a empresa como origem de usuários, áreas, ocorrências, conversas e métricas ESG. As ocorrências conectam o registro operacional aos relatórios de IA, anexos e coletas; as coletas conectam cooperativas, histórico de status, avaliações e conversas. As constraints declaradas protegem identificadores únicos, referências obrigatórias, valores numéricos válidos, coordenadas geográficas, avaliações, métricas ESG e coerência básica do agendamento.
-
-## Migração do legado
-
-O schema legado está separado em `legacy/01-legacy_schema.sql` e usa `INTEGER` como chave primária. O destino atual, definido em `scripts/01-schema.sql`, usa UUID. A migração para o destino de teste é executada por `rpa/migration.py`, com `LEGACY_URL` como origem e `VOLTA_RPA_TEST_URL` como destino.
-
-O controle operacional fica em `migration_run`, `migration_id_map` e `migration_error`. A carga sintética legada fornecida possui 49 registros; uma execução completa deve produzir as respectivas entradas de correspondência de IDs. O processo valida os schemas, reconstrói FKs com os UUIDs mapeados, é idempotente para IDs já registrados e executa a carga em transação única. Em falha, os dados da execução são revertidos e o erro é registrado.
-
-Essa documentação não afirma tratamento individual concluído por registro nem login seguro concluído. O RPA do Power Automate Desktop apenas executa o script, verifica o exit code e direciona a conferência de `migration_run` e `migration_error` no destino de teste.
