@@ -2,7 +2,7 @@
 
 Repositório responsável pela persistência, evolução e documentação da camada de dados do **VOLTA**, plataforma voltada à gestão de resíduos, ocorrências, coletas, cooperativas e indicadores ESG.
 
-O PostgreSQL é o banco relacional principal do projeto. Este repositório concentra as migrations versionadas, scripts de apoio e o dataload para ambientes locais e de desenvolvimento. MongoDB é utilizado para o domínio de conversas, e Redis atende consultas de ranking de empresas com baixa latência.
+O PostgreSQL é o banco relacional principal do projeto. Este repositório concentra o schema atual, o legado separado, scripts de apoio, dataloads e a migração para um destino de teste. MongoDB é utilizado para o domínio de conversas, e Redis atende consultas de ranking de empresas com baixa latência.
 
 ## Índice
 
@@ -14,6 +14,7 @@ O PostgreSQL é o banco relacional principal do projeto. Este repositório conce
 - [Configuração e execução](#configuração-e-execução)
 - [Ordem de execução](#ordem-de-execução)
 - [Dataload](#dataload)
+- [Migração do legado para teste](#migração-do-legado-para-teste)
 - [Validação](#validação)
 - [Decisões de modelagem](#decisões-de-modelagem)
 - [Segurança](#segurança)
@@ -26,14 +27,14 @@ O PostgreSQL é o banco relacional principal do projeto. Este repositório conce
 | PostgreSQL              | Fonte de verdade relacional: empresas, usuários, áreas, resíduos, ocorrências, coletas, avaliações, notificações e métricas ESG. |
 | MongoDB                 | Conversas, mensagens e anexos de mensagens, adequados a um domínio com conteúdo e volume variáveis.                                    |
 | Redis                   | Ranking de empresas e dados de consulta rápida; não substitui a persistência definitiva no PostgreSQL.                                 |
-| Flyway                  | Versionamento e aplicação ordenada das alterações de schema.                                                                          |
+| Scripts SQL              | Versionamento e aplicação ordenada do schema, cargas e controles operacionais.                                                        |
 | Docker / Docker Compose | Execução reproduzível dos serviços em ambiente local, quando disponibilizado pelo projeto.                                            |
 
 ## Tecnologias
 
 - PostgreSQL 16+ (compatível com versões recentes do PostgreSQL)
 - Extensão PostgreSQL `pgcrypto` para geração de UUIDs
-- Flyway para migrations
+- `psql` para execução dos scripts SQL
 - MongoDB para o módulo de conversas
 - Redis para ranking de empresas
 - Docker e Docker Compose (opcionais, recomendados para desenvolvimento local)
@@ -67,20 +68,17 @@ A estrutura pode variar ligeiramente conforme a organização do repositório, m
 
 ```text
 .
-├── docker-compose.yml                 # serviços locais, quando aplicável
-├── Dockerfile                         # imagem do banco, quando aplicável
-├── flyway.conf                        # configuração do Flyway, se utilizada localmente
-├── migrations/                        # migrations versionadas
-│   ├── V1__initial_schema.sql
-│   └── V...__descricao_da_mudanca.sql
-├── scripts/
-│   ├── dataload.sql                   # carga inicial para desenvolvimento
-│   └── validation.sql                 # consultas de validação, se existente
-└── docs/
-    └── normalizacao_banco_volta.md
+├── scripts/01-schema.sql              # schema relacional atual, UUID
+├── scripts/02-dataload.sql             # carga sintética do destino atual
+├── scripts/13-migration_control.sql    # tabelas de controle da migração
+├── legacy/01-legacy_schema.sql         # schema legado, INTEGER
+├── legacy/02-legacy_dataload.sql       # carga sintética do legado
+├── rpa/migration.py                     # migração PostgreSQL → PostgreSQL
+├── rpa/requirements.txt
+└── docs/                                # modelagem e normalização
 ```
 
-Se o projeto usar o layout padrão do Flyway, as migrations podem estar em `src/main/resources/db/migration/`. Mantenha apenas um local configurado como fonte de migrations.
+Este checkout não contém arquivos de collections, scripts ou configuração de MongoDB. A documentação do domínio Mongo não deve ser tratada como uma entrega de arquivos Mongo neste repositório.
 
 ## Pré-requisitos
 
@@ -138,21 +136,16 @@ docker compose logs -f postgres
 
 O nome do serviço pode ser diferente no seu `docker-compose.yml`; ajuste o último comando se necessário.
 
-### 4. Aplicar as migrations com Flyway
+### 4. Aplicar o schema e os controles
 
-Quando o Flyway for executado localmente, configure a URL e as credenciais do banco e rode:
-
-```bash
-flyway migrate
-```
-
-Antes de aplicar uma mudança, é útil conferir o estado atual:
+No checkout atual, os scripts SQL são a fonte de execução. Configure a conexão do destino de teste e rode:
 
 ```bash
-flyway info
+psql -h localhost -U volta_user -d volta -f scripts/01-schema.sql
+psql -h localhost -U volta_user -d volta -f scripts/13-migration_control.sql
 ```
 
-Caso o backend execute o Flyway na inicialização, não rode migrations manualmente em paralelo: escolha um único processo responsável pela aplicação.
+O projeto não contém configuração Flyway neste checkout. Caso a aplicação use outro executor de migrations, mantenha apenas um processo responsável pela aplicação das alterações.
 
 ## Ordem de execução
 
@@ -160,13 +153,13 @@ Para uma instalação local limpa, siga esta ordem:
 
 1. Suba o PostgreSQL (via Docker ou instalação local).
 2. Crie o banco e configure as variáveis de ambiente.
-3. Aplique todas as migrations com Flyway.
+3. Aplique `scripts/01-schema.sql` e `scripts/13-migration_control.sql`.
 4. Confirme que o schema e a extensão `pgcrypto` foram criados.
 5. Execute o dataload apenas no ambiente de desenvolvimento/teste.
 6. Rode as consultas de validação.
 7. Suba MongoDB e Redis se for testar conversas e ranking.
 
-Não altere uma migration que já tenha sido compartilhada ou aplicada em outro ambiente. Crie uma nova migration com o próximo número de versão, por exemplo `V5__add_collection_index.sql`.
+Não altere um script SQL já compartilhado ou aplicado em outro ambiente sem alinhar a estratégia de evolução. Prefira um novo script versionado quando a mudança precisar ser rastreável.
 
 ## Dataload
 
@@ -184,7 +177,7 @@ Ele inclui, entre outros:
 Para executar o script (ajuste o caminho conforme o repositório):
 
 ```bash
-psql -h localhost -U volta_user -d volta -f scripts/dataload.sql
+psql -h localhost -U volta_user -d volta -f scripts/02-dataload.sql
 ```
 
 O script utiliza `generate_series()` e `gen_random_uuid()`. Por isso, a extensão `pgcrypto` deve estar disponível antes da carga:
@@ -204,6 +197,23 @@ REQUESTED → SCHEDULED → IN_PROGRESS → COMPLETED
 ```
 
 O último registro em `collection_status` deve corresponder a `collection.current_status`.
+
+## Migração do legado para teste
+
+O legado PostgreSQL fica separado em `legacy/` e usa chaves `INTEGER`. O destino de teste é o schema atual de `scripts/01-schema.sql`, que usa UUID. A migração é executada por `rpa/migration.py` e recebe duas conexões distintas:
+
+- `LEGACY_URL`: origem legada;
+- `VOLTA_RPA_TEST_URL`: destino de teste.
+
+Antes da carga, o script valida os schemas, confirma que as tabelas `migration_run`, `migration_id_map` e `migration_error` existem no destino e recusa URLs invertidas. As FKs do destino são reconstruídas a partir de `migration_id_map`; a senha legada não é copiada e o usuário migrado recebe um marcador aleatório que exige redefinição.
+
+A carga sintética legada fornecida possui **49 registros**. Em uma execução completa, espera-se uma entrada correspondente por registro em `migration_id_map`, respeitando a ordem das 17 tabelas e suas dependências. A execução é idempotente: registros já mapeados são ignorados, enquanto uma colisão no destino sem mapeamento confirmado gera erro.
+
+Cada execução registra estado em `migration_run`. A carga ocorre em transação única; em caso de falha, a transação de dados é revertida e a falha é registrada em `migration_run` e `migration_error`. Isso não significa que exista tratamento individual concluído para cada registro.
+
+### RPA no Power Automate Desktop
+
+O fluxo do Power Automate Desktop executa `rpa\migration.py` por `cmd.exe`, armazena o ID do processo e o código de saída, e exibe sucesso somente quando `MigrationExitCode = 0`. Caso contrário, informa a falha e orienta a verificar `migration_run` e `migration_error` no destino de teste. Login seguro e tratamento individual por registro não devem ser descritos como concluídos nesta etapa.
 
 ## Validação
 
@@ -283,12 +293,9 @@ WHERE total_recycled_kg > total_waste_kg;
 
 O resultado esperado é vazio.
 
-### Validar migrations
+### Validar scripts
 
-```bash
-flyway validate
-flyway info
-```
+Confirme que os scripts foram executados na ordem documentada e que as tabelas de controle da migração existem no destino de teste.
 
 ## Decisões de modelagem
 
@@ -309,13 +316,15 @@ flyway info
 - Não execute o dataload em produção.
 - Armazene apenas hashes de senha, nunca senhas em texto puro.
 - Revise permissões de leitura/escrita de anexos e URLs assinadas antes de liberar o ambiente.
+- O `.gitignore` exclui `.env`, arquivos de ambiente derivados, dumps e logs; `.env.example` contém apenas placeholders.
+- Antes de preparar um commit, confirme que `git status --ignored` não mostra credenciais versionáveis e revise URLs, tokens, chaves e dumps adicionados.
 
 ## Contribuição
 
 1. Abra uma branch a partir da branch de integração do projeto.
-2. Crie uma nova migration seguindo o padrão `V<versão>__<descricao>.sql`.
+2. Crie um novo script SQL versionado quando a alteração precisar ser preservada.
 3. Use nomes em inglês, `snake_case` e UUIDs quando aplicável.
-4. Não edite migrations já aplicadas em ambientes compartilhados.
+4. Não edite scripts já aplicados em ambientes compartilhados.
 5. Teste a migration em um banco vazio e em uma cópia de desenvolvimento representativa.
 6. Rode `flyway validate` e as consultas de validação relevantes.
 7. Atualize a documentação quando a mudança alterar o modelo, integrações ou operação local.
