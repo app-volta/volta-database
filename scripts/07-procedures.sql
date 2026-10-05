@@ -215,7 +215,37 @@ $$;
 -- TESTE 1 - UPDATE COLLECTION STATUS
 -- ============================================================
 
--- Busque primeiro uma coleta:
+SELECT
+    id,
+    current_status
+FROM collection
+LIMIT 5;
+
+DO $$
+DECLARE
+    v_collection_id UUID;
+BEGIN
+    SELECT id
+    INTO v_collection_id
+    FROM collection
+    ORDER BY requested_at
+    LIMIT 1;
+
+    IF v_collection_id IS NULL THEN
+        RAISE EXCEPTION
+            'Nenhuma coleta encontrada para testar update_collection_status.';
+    END IF;
+
+    CALL update_collection_status(
+        v_collection_id,
+        'IN_PROGRESS',
+        'Coleta iniciada para teste.'
+    );
+END;
+$$;
+
+
+-- Conferir coleta
 SELECT
     id,
     current_status
@@ -223,24 +253,7 @@ FROM collection
 LIMIT 5;
 
 
--- Substitua pelo UUID encontrado:
-
-CALL update_collection_status(
-    'caf5f778-63d1-4662-b6e4-46b937465fba',
-    'IN_PROGRESS',
-    'Coleta iniciada para teste.'
-);
-
-
--- Conferir coleta:
-SELECT
-    id,
-    current_status
-FROM collection
-LIMIT 5;
-
-
--- Conferir histórico:
+-- Conferir histórico
 SELECT
     collection_id,
     status,
@@ -251,14 +264,10 @@ ORDER BY changed_at DESC
 LIMIT 10;
 
 
-
 -- ============================================================
 -- TESTE 2 - SCHEDULE COLLECTION
 -- ============================================================
 
--- IMPORTANTE:
--- utilize uma data posterior ao requested_at da coleta.
-
 SELECT
     id,
     requested_at,
@@ -267,13 +276,32 @@ SELECT
 FROM collection
 LIMIT 5;
 
+DO $$
+DECLARE
+    v_collection_id UUID;
+    v_requested_at TIMESTAMP;
+BEGIN
+    SELECT
+        id,
+        requested_at
+    INTO
+        v_collection_id,
+        v_requested_at
+    FROM collection
+    ORDER BY requested_at
+    LIMIT 1;
 
--- Exemplo:
+    IF v_collection_id IS NULL THEN
+        RAISE EXCEPTION
+            'Nenhuma coleta encontrada para testar schedule_collection.';
+    END IF;
 
-CALL schedule_collection(
-    '16e27436-e1fd-4d39-be71-8f1a53a85872',
-	'2026-12-20 14:00:00'
-);
+    CALL schedule_collection(
+        v_collection_id,
+        v_requested_at + INTERVAL '1 day'
+    );
+END;
+$$;
 
 
 SELECT
@@ -283,7 +311,6 @@ SELECT
     current_status
 FROM collection
 LIMIT 5;
-
 
 
 -- ============================================================
@@ -298,15 +325,28 @@ FROM incident
 WHERE status <> 'CLOSED'
 LIMIT 5;
 
+DO $$
+DECLARE
+    v_incident_id UUID;
+BEGIN
+    SELECT id
+    INTO v_incident_id
+    FROM incident
+    WHERE status <> 'CLOSED'
+    ORDER BY registered_at
+    LIMIT 1;
 
--- Substitua pelo UUID encontrado:
+    IF v_incident_id IS NULL THEN
+        RAISE EXCEPTION
+            'Nenhuma ocorrência aberta encontrada para testar close_incident.';
+    END IF;
 
-CALL close_incident(
-    '1e732f53-f410-40e5-9070-8dca0457dac4'
-);
+    CALL close_incident(v_incident_id);
+END;
+$$;
 
 
--- Conferir ocorrência:
+-- Conferir ocorrência
 SELECT
     id,
     status
@@ -316,7 +356,7 @@ ORDER BY registered_at DESC
 LIMIT 10;
 
 
--- Conferir notificação criada:
+-- Conferir notificação criada
 SELECT
     user_id,
     type,
