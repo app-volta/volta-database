@@ -619,6 +619,53 @@ Redis é utilizado como camada de consulta rápida/ranking.
 
 Alterações compartilhadas no banco devem ser realizadas por novos scripts versionados quando for necessário preservar o histórico da evolução, evitando alterações silenciosas em scripts já utilizados por outros ambientes.
 
+## MongoDB
+
+O projeto utiliza MongoDB para persistência das funcionalidades conversacionais do VOLTA.
+
+Para desenvolvimento local, uma instância do MongoDB pode ser executada através do Docker Compose. A configuração utiliza o database `volta_chat` e executa automaticamente o script `scripts/mongodb/init-chat.js` durante a inicialização.
+
+O script é responsável pela criação das collections e estruturas necessárias:
+
+```text
+volta_chat
+├── sessions
+└── messages
+```
+
+Também são configurados os seguintes índices:
+
+- `idx_messages_session_created`: índice composto utilizando `session_id` e `created_at`, utilizado na consulta do histórico de mensagens;
+- `idx_sessions_expires_ttl`: índice TTL sobre `expires_at`, responsável pela remoção automática de sessões expiradas.
+
+### Executar localmente
+
+Configure as variáveis de ambiente utilizando o `.env.example` e execute:
+
+```bash
+docker compose up -d
+```
+
+Por padrão, o ambiente local do VOLTA disponibiliza o MongoDB através da porta:
+
+```text
+localhost:27018
+```
+
+Para verificar o container:
+
+```bash
+docker compose ps
+```
+
+Para acompanhar a inicialização:
+
+```bash
+docker logs volta-mongo
+```
+
+> O ambiente Docker é destinado ao desenvolvimento e validação local. Credenciais reais não devem ser versionadas no repositório.
+
 ## Segurança
 
 - Nunca versione senhas, tokens ou URLs contendo credenciais.
@@ -645,7 +692,3 @@ Alterações compartilhadas no banco devem ser realizadas por novos scripts vers
    - como foi validado;
    - impactos conhecidos;
    - estratégia de rollback, quando aplicável.
-
-## Licença
-
-Defina aqui a licença adotada pelo projeto, caso aplicável.
