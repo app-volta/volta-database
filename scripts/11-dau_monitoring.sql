@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS user_daily_access (
     first_access_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_access_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     access_count INTEGER NOT NULL DEFAULT 1,
-	
+
     CONSTRAINT fk_user_daily_access_user
         FOREIGN KEY (user_id)
         REFERENCES users(id),
@@ -45,6 +45,8 @@ CREATE OR REPLACE PROCEDURE register_user_access(
 LANGUAGE plpgsql
 AS $$
 BEGIN
+
+    -- Verifica se o usuário existe
     IF NOT EXISTS (
         SELECT 1
         FROM users
@@ -55,6 +57,7 @@ BEGIN
             p_user_id;
     END IF;
 
+    -- Registra o acesso do usuário
     INSERT INTO user_daily_access (
         user_id,
         access_date,
@@ -69,10 +72,14 @@ BEGIN
         CURRENT_TIMESTAMP,
         1
     )
+
+    -- Caso o usuário já tenha acessado no mesmo dia,
+    -- atualiza o último acesso e incrementa o contador.
     ON CONFLICT (user_id, access_date)
     DO UPDATE SET
         last_access_at = CURRENT_TIMESTAMP,
         access_count = user_daily_access.access_count + 1;
+
 END;
 $$;
 
@@ -115,22 +122,85 @@ ORDER BY
 -- EXEMPLO DE TESTE
 -- ============================================================
 
--- Obter usuário:
-SELECT id, name, email
+-- Exibe alguns usuários disponíveis
+SELECT
+    id,
+    name,
+    email
 FROM users
 LIMIT 5;
 
 
--- Executar mais de uma vez:
+-- ============================================================
+-- TESTE - REGISTER USER ACCESS
+-- ============================================================
+-- Busca dinamicamente até 3 usuários existentes no banco.
 --
-CALL register_user_access('e7d2d020-a687-4d1b-8da2-9f4e7c5fe8e3');
+-- Para cada usuário encontrado:
+-- 1ª chamada -> cria o registro de acesso;
+-- 2ª chamada -> testa o ON CONFLICT e incrementa access_count.
 --
-CALL register_user_access('11bc16a5-3294-4893-bc20-7e23deed5155');
---
-CALL register_user_access('6d109ff5-0ce1-4b16-836e-6817cb587f4b');
+-- Caso não existam usuários, o teste é ignorado sem
+-- interromper a execução do CI.
+-- ============================================================
+
+DO $$
+DECLARE
+    v_user RECORD;
+    v_users_found INTEGER := 0;
+BEGIN
+
+    FOR v_user IN
+        SELECT id
+        FROM users
+        ORDER BY id
+        LIMIT 3
+    LOOP
+
+        v_users_found := v_users_found + 1;
+
+        -- Primeiro acesso
+        CALL register_user_access(v_user.id);
+
+        -- Segundo acesso no mesmo dia
+        -- Deve incrementar access_count através do ON CONFLICT
+        CALL register_user_access(v_user.id);
+
+    END LOOP;
+
+    IF v_users_found = 0 THEN
+        RAISE NOTICE
+            'Teste register_user_access ignorado: nenhum usuário disponível.';
+    END IF;
+
+END;
+$$;
 
 
--- Conferir:
-SELECT *
+-- ============================================================
+-- CONFERIR RESULTADO
+-- ============================================================
+
+SELECT
+    id,
+    user_id,
+    access_date,
+    first_access_at,
+    last_access_at,
+    access_count
 FROM user_daily_access
+ORDER BY
+    access_date DESC,
+    last_access_at DESC;
+
+
+-- ============================================================
+-- CONFERIR DAU APÓS O TESTE
+-- ============================================================
+
+SELECT
+    access_date,
+    COUNT(*) AS daily_active_users
+FROM user_daily_access
+GROUP BY access_date
 ORDER BY access_date DESC;

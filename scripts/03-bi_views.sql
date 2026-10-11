@@ -285,4 +285,4 @@ SELECT
         ) AS recycling_percentage_delta
 FROM bi.fact_esg_metric fem
 JOIN bi.dim_company dc
-    ON dc.company_id = fem.company_id;+
+    ON dc.company_id = fem.company_id;
