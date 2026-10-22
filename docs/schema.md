@@ -4,7 +4,7 @@
 
 O banco relacional do projeto **VOLTA** foi definido para PostgreSQL e organiza dados de empresas, usuários, áreas, ocorrências de resíduos, análises de IA, cooperativas, coletas, avaliações, conversas, notificações e indicadores ESG.
 
-O esquema contém **17 tabelas**. Os relacionamentos são implementados por chaves estrangeiras e as principais regras de domínio presentes no próprio `schema.sql` são aplicadas por `NOT NULL`, `UNIQUE`, valores padrão e restrições `CHECK`.
+O esquema contém **18 tabelas**. Os relacionamentos são implementados por chaves estrangeiras e as principais regras de domínio presentes no próprio `schema.sql` são aplicadas por `NOT NULL`, `UNIQUE`, valores padrão e restrições `CHECK`.
 
 > Esta documentação descreve somente o que está declarado no `schema.sql`. Campos textuais como `status`, `priority`, `type`, níveis e categorias não possuem enumeração ou `CHECK` de valores no esquema atual.
 
@@ -18,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 Todas as tabelas usam uma coluna `id` do tipo `UUID` como chave primária, com geração automática por `gen_random_uuid()`. A função é disponibilizada pela extensão `pgcrypto` e evita a dependência de identificadores inteiros sequenciais.
 
-Padrão aplicado às 17 tabelas:
+Padrão aplicado às 18 tabelas:
 
 ```sql
 id UUID PRIMARY KEY DEFAULT gen_random_uuid()
@@ -30,12 +30,14 @@ id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 
 Representa as empresas atendidas pela plataforma.
 
-| Campo       | Tipo             | Regras                           | Descrição                                                                             |
-| ----------- | ---------------- | -------------------------------- | --------------------------------------------------------------------------------------- |
-| `id`      | `UUID`         | PK, padrão`gen_random_uuid()` | Identificador da empresa.                                                               |
-| `name`    | `VARCHAR(150)` | `NOT NULL`                     | Nome da empresa.                                                                        |
-| `cnpj`    | `VARCHAR(18)`  | `NOT NULL`, `UNIQUE`         | CNPJ da empresa. Criado inicialmente como`VARCHAR(14)` e ampliado ao final do script. |
-| `address` | `VARCHAR(255)` | `NOT NULL`                     | Endereço da empresa.                                                                   |
+| Campo       | Tipo               | Regras                           | Descrição                                                                             |
+| ----------- | ------------------ | -------------------------------- | --------------------------------------------------------------------------------------- |
+| `id`      | `UUID`           | PK, padrão`gen_random_uuid()` | Identificador da empresa.                                                               |
+| `name`    | `VARCHAR(150)`   | `NOT NULL`                     | Nome da empresa.                                                                        |
+| `cnpj`    | `VARCHAR(18)`    | `NOT NULL`, `UNIQUE`         | CNPJ da empresa. Criado inicialmente como`VARCHAR(14)` e ampliado ao final do script. |
+| `address` | `VARCHAR(255)`   | `NOT NULL`                     | Endereço da empresa.                                                                   |
+| `latitude`| `DOUBLE PRECISION`| (pode ser NULL)                | Coordenada geográfica de latitude da empresa.                                            |
+| `longitude`| `DOUBLE PRECISION`| (pode ser NULL)                | Coordenada geográfica de longitude da empresa.                                           |
 
 Não possui chaves estrangeiras. É referenciada por `users`, `area`, `incident`, `conversation` e `esg_metric`.
 
@@ -166,7 +168,24 @@ Regras de domínio:
 
 A tabela é referenciada por `collection`, `review` e `conversation`.
 
-### 10. `collection`
+### 10. `cooperative_waste_type`
+
+Tabela de associação N:N que relaciona cooperativas a tipos de resíduos.
+
+| Campo            | Tipo   | Regras                     | Descrição |
+| ---------------- | ------ | -------------------------- | --------- |
+| `cooperative_id`| `UUID` | `NOT NULL`, FK → `cooperative.id` | Referência à cooperativa. |
+| `waste_type_id` | `UUID` | `NOT NULL`, FK → `waste_type.id`   | Referência ao tipo de resíduo. |
+
+**Constraints**
+
+- **PK composta**: (`cooperative_id`, `waste_type_id`).
+- `fk_cwt_cooperative`: FK para `cooperative(id)`.
+- `fk_cwt_waste_type`: FK para `waste_type(id)`.
+
+Esta tabela permite que uma cooperativa esteja associada a múltiplos tipos de resíduos e que um mesmo tipo de resíduo seja associado a várias cooperativas. A chave primária composta impede a duplicação de pares cooperativa‑tipo.
+
+### 11. `collection`
 
 Representa a solicitação e o agendamento de uma coleta para uma ocorrência, executada por uma cooperativa.
 
@@ -185,7 +204,7 @@ Constraints nomeadas: `fk_collection_incident`, `fk_collection_cooperative` e `c
 
 A tabela é referenciada por `collection_status`, `review` e `conversation`.
 
-### 11. `collection_status`
+### 12. `collection_status`
 
 Registra o histórico de mudanças de status de uma coleta.
 
@@ -199,7 +218,7 @@ Registra o histórico de mudanças de status de uma coleta.
 
 Constraint nomeada: `fk_collection_status_collection`. O esquema permite vários eventos para a mesma coleta. Não há constraint que sincronize `collection.current_status` com o registro mais recente desta tabela.
 
-### 12. `review`
+### 13. `review`
 
 Armazena a avaliação feita por um usuário sobre uma cooperativa, vinculada a uma coleta.
 
@@ -215,7 +234,7 @@ Armazena a avaliação feita por um usuário sobre uma cooperativa, vinculada a 
 
 Constraints nomeadas: `fk_review_cooperative`, `fk_review_user`, `fk_review_collection` e `chk_review_stars`. A nota deve estar entre `1` e `5`. Não há restrição `UNIQUE` que limite avaliações por usuário ou coleta.
 
-### 13. `conversation`
+### 14. `conversation`
 
 Representa uma conversa entre o contexto de uma empresa e uma cooperativa, associada a uma coleta.
 
@@ -229,7 +248,7 @@ Representa uma conversa entre o contexto de uma empresa e uma cooperativa, assoc
 
 Constraints nomeadas: `fk_conversation_company`, `fk_conversation_cooperative` e `fk_conversation_collection`. `collection_id` não é `UNIQUE`; portanto, o esquema permite mais de uma conversa ligada à mesma coleta.
 
-### 14. `message`
+### 15. `message`
 
 Armazena as mensagens enviadas dentro de uma conversa.
 
@@ -244,7 +263,7 @@ Armazena as mensagens enviadas dentro de uma conversa.
 
 Constraints nomeadas: `fk_message_conversation` e `fk_message_user`. A tabela é referenciada por `message_attachment`.
 
-### 15. `message_attachment`
+### 16. `message_attachment`
 
 Registra arquivos associados a mensagens.
 
@@ -257,7 +276,7 @@ Registra arquivos associados a mensagens.
 
 Constraint nomeada: `fk_message_attachment_message`. Uma mensagem pode ser referenciada por vários anexos.
 
-### 16. `notification`
+### 17. `notification`
 
 Armazena notificações destinadas aos usuários.
 
@@ -273,7 +292,7 @@ Armazena notificações destinadas aos usuários.
 
 Constraint nomeada: `fk_notification_user`. Os valores possíveis de `type` não são limitados por `CHECK`.
 
-### 17. `esg_metric`
+### 18. `esg_metric`
 
 Armazena indicadores ESG de uma empresa por período.
 
@@ -327,12 +346,14 @@ Todas as FKs obrigatórias usam `NOT NULL`; a única FK opcional é `incident.wa
 | `message_attachment.message_id`   | `message.id`      | Uma mensagem pode possuir vários anexos.                                   |
 | `notification.user_id`            | `users.id`        | Um usuário pode receber várias notificações.                            |
 | `esg_metric.company_id`           | `company.id`      | Uma empresa pode possuir várias métricas ESG.                             |
+| `cooperative_waste_type.cooperative_id` | `cooperative.id` | Associação N:N: cooperativa pode ter vários tipos de resíduos. |
+| `cooperative_waste_type.waste_type_id` | `waste_type.id`  | Associação N:N: tipo de resíduo pode estar em várias cooperativas. |
 
 ## Fluxo textual dos relacionamentos
 
 ```text
 role ────────────────┐
-                     ▼
+                      ▼
 company ──────────► users ───────────────► notification
    │                 │
    │                 ├───────────────────► message ───► message_attachment
@@ -354,6 +375,10 @@ company ──────────► users ──────────�
    │                       │         ▲
    │                       ▼         │
    │                  cooperative ───┘
+   │                       │
+   │          cooperative_waste_type (N:N)      
+   │                       ▼
+   └─────────────────────────► waste_type
    │
    └──────────────────────────────► esg_metric
 ```
@@ -432,9 +457,11 @@ Assim, o tipo efetivo após a execução completa do arquivo é `VARCHAR(18)` na
 - **Avaliações ligadas ao contexto da coleta:** `review` referencia simultaneamente cooperativa, usuário e coleta.
 - **Conversas contextualizadas:** `conversation` relaciona empresa, cooperativa e coleta; `message` e `message_attachment` formam a hierarquia de conteúdo da conversa.
 - **Indicadores ESG históricos:** `esg_metric` referencia a empresa e possui um campo de período, permitindo vários registros ao longo do tempo, sem impor unicidade empresa/período.
-- **Integridade declarativa focalizada:** quantidades, coordenadas, notas, datas e métricas possuem `CHECK`; campos textuais de estado e classificação permanecem abertos.
+- **Integração N:N entre cooperativas e tipos de resíduos:** a tabela `cooperative_waste_type` fornece uma modelagem estruturada que substitui o campo textual `cooperative.specialties` para representar esse relacionamento.
+- **Coordenadas geográficas nas empresas:** as novas colunas `latitude` e `longitude` em `company` permitem integração com APIs externas (por exemplo, Redis) para funcionalidades baseadas em localização.
+- **Integração declarativa focalizada:** quantidades, coordenadas, notas, datas e métricas possuem `CHECK`; campos textuais de estado e classificação permanecem abertos.
 - **Sem cascatas explícitas:** nenhuma FK define `ON DELETE` ou `ON UPDATE`, portanto o banco usa as ações padrão do PostgreSQL.
 
 ## Resumo
 
-O esquema do VOLTA centraliza a empresa como origem de usuários, áreas, ocorrências, conversas e métricas ESG. As ocorrências conectam o registro operacional aos relatórios de IA, anexos e coletas; as coletas conectam cooperativas, histórico de status, avaliações e conversas. As constraints declaradas protegem identificadores únicos, referências obrigatórias, valores numéricos válidos, coordenadas geográficas, avaliações, métricas ESG e coerência básica do agendamento.
+O esquema do VOLTA centraliza a empresa como origem de usuários, áreas, ocorrências, conversas e métricas ESG. As ocorrências conectam o registro operacional aos relatórios de IA, anexos e coletas; as coletas conectam cooperativas, histórico de status, avaliações e conversas. As constraints declaradas protegem identificadores únicos, referências obrigatórias, valores numéricos válidos, coordenadas geográficas, avaliações, métricas ESG e coerência básica do agendamento. A inclusão da tabela de associação `cooperative_waste_type` e das colunas geográficas em `company` ampliam a capacidade de modelagem e integração do sistema.

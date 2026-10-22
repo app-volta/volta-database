@@ -21,6 +21,7 @@ A modelagem é composta pelas entidades:
 - `ai_report`
 - `attachment`
 - `cooperative`
+- `cooperative_waste_type`<small></small>
 - `collection`
 - `collection_status`
 - `review`
@@ -42,9 +43,11 @@ A **Primeira Forma Normal (1FN)** estabelece que os dados devem ser organizados 
 
 No VOLTA, todas as entidades possuem um campo `id` utilizado como chave primária. Os identificadores utilizam o tipo `UUID`.
 
+**Exceção — chave primária composta:** a tabela `cooperative_waste_type` não possui uma coluna `id` própria. Sua chave primária é composta pelos campos `cooperative_id` e `waste_type_id`, ambos do tipo `UUID`. Essa estrutura identifica unicamente cada associação entre uma cooperativa e um tipo de resíduo.
+
 ## Exemplo: Company
 
-```text
+```Markdown
 company
 
 id
@@ -55,12 +58,12 @@ address
 
 Cada atributo possui uma finalidade específica:
 
-| Atributo | Informação |
-|---|---|
-| `id` | Identificador único da empresa |
-| `name` | Nome da empresa |
-| `cnpj` | CNPJ da empresa |
-| `address` | Endereço da empresa |
+| Atributo    | Informação                    |
+| ----------- | ------------------------------- |
+| `id`      | Identificador único da empresa |
+| `name`    | Nome da empresa                 |
+| `cnpj`    | CNPJ da empresa                 |
+| `address` | Endereço da empresa            |
 
 Não existe, por exemplo, um único campo contendo múltiplas empresas ou diversos CNPJs.
 
@@ -76,7 +79,7 @@ A Primeira Forma Normal é atendida através de:
 
 Outro exemplo é a tabela `attachment`.
 
-```text
+```Markdown
 attachment
 
 id
@@ -100,11 +103,13 @@ A **Segunda Forma Normal (2FN)** estabelece que uma tabela deve:
 
 No banco do VOLTA, as tabelas utilizam uma chave primária individual (`id`). Isso contribui para que os atributos de cada entidade estejam relacionados ao registro identificado pelo seu UUID.
 
+A tabela `cooperative_waste_type` utiliza uma chave primária composta. Como seus dois campos são chaves estrangeiras e não existem atributos não-chave nessa tabela, não há dependências parciais de atributos não-chave em relação à chave primária composta.
+
 ## Exemplo: Users
 
 A tabela `users` possui a seguinte estrutura conceitual:
 
-```text
+```Markdown
 users
 
 id
@@ -122,7 +127,7 @@ As informações `name`, `email`, `password_hash` e `position` pertencem especif
 
 As informações da empresa não são armazenadas diretamente nessa tabela. Por exemplo, a tabela `users` não possui:
 
-```text
+```Markdown
 company_name
 company_cnpj
 company_address
@@ -138,7 +143,7 @@ Essa separação reduz a repetição de dados.
 
 A tabela `area` possui:
 
-```text
+```Markdown
 area
 
 id
@@ -151,7 +156,7 @@ As informações relacionadas à empresa não são repetidas dentro da tabela `a
 
 Isso permite que uma empresa possua diversas áreas:
 
-```text
+```Markdown
 Company
     │
     ├── Area 1
@@ -317,7 +322,33 @@ Isso evita repetir informações sobre um mesmo tipo de resíduo em diversas oco
 
 ---
 
-## 5.5 Incident e AI Report
+## 5.5 Cooperative e Waste Type
+
+Uma cooperativa pode aceitar vários tipos de resíduos, assim como um mesmo tipo de resíduo pode ser aceito por várias cooperativas. Essa relação é classificada como muitos-para-muitos (N:N).
+
+Para representar essa relação, o VOLTA utiliza a tabela intermediária `cooperative_waste_type`:
+
+```text
+cooperative_waste_type
+
+cooperative_id
+waste_type_id
+```
+
+Os campos são chaves estrangeiras que referenciam as tabelas correspondentes:
+
+```text
+cooperative_waste_type.cooperative_id → cooperative.id
+cooperative_waste_type.waste_type_id → waste_type.id
+```
+
+A chave primária composta por `(cooperative_id, waste_type_id)` impede a repetição da mesma associação.
+
+Essa estrutura permite relacionar cooperativas e tipos de resíduos de forma estruturada, sem depender exclusivamente do campo textual `specialties`, que continua existindo na tabela `cooperative`.
+
+<pre class="vditor-reset" placeholder="" contenteditable="true" spellcheck="false"><hr data-block="0" class=""/></pre>
+
+## 5.6 Incident e AI Report
 
 Os dados produzidos pela Inteligência Artificial foram separados da ocorrência.
 
@@ -347,7 +378,7 @@ Essa separação evita que informações específicas do módulo de Inteligênci
 
 ---
 
-## 5.6 Incident e Attachment
+## 5.7 Incident e Attachment
 
 Os arquivos relacionados a uma ocorrência foram separados na tabela `attachment`.
 
@@ -374,7 +405,7 @@ Essa estrutura evita a criação de campos repetitivos como `attachment_1`, `att
 
 ---
 
-## 5.7 Collection e Collection Status
+## 5.8 Collection e Collection Status
 
 O histórico dos status de uma coleta foi separado da tabela principal.
 
@@ -428,7 +459,7 @@ Portanto, o sistema deve garantir que:
 
 ---
 
-## 5.8 Collection e Review
+## 5.9 Collection e Review
 
 As avaliações das cooperativas foram separadas das coletas.
 
@@ -450,7 +481,7 @@ A separação evita que informações de avaliação sejam armazenadas diretamen
 
 ---
 
-## 5.9 Conversation e Message
+## 5.10 Conversation e Message
 
 As conversas e mensagens foram separadas.
 
@@ -489,7 +520,7 @@ Isso permite que uma conversa possua diversas mensagens.
 
 ---
 
-## 5.10 Message e Message Attachment
+## 5.11 Message e Message Attachment
 
 Os arquivos enviados através das mensagens foram separados.
 
@@ -508,7 +539,7 @@ Isso evita atributos repetitivos e mantém os anexos como registros independente
 
 ---
 
-## 5.11 Users e Notification
+## 5.12 Users e Notification
 
 As notificações foram modeladas como uma entidade independente.
 
@@ -536,7 +567,7 @@ As informações das notificações não precisam ser armazenadas diretamente na
 
 ---
 
-## 5.12 Company e ESG Metric
+## 5.13 Company e ESG Metric
 
 As métricas ESG foram separadas da entidade `company`.
 
@@ -562,10 +593,10 @@ Essa estrutura evita que métricas históricas sejam armazenadas diretamente na 
 
 # 6. Resumo da Aplicação das Formas Normais
 
-| Forma Normal | Aplicação no VOLTA |
-|---|---|
-| **1FN** | Cada tabela possui chave primária e atributos individuais |
-| **2FN** | Os atributos dependem completamente da identificação do registro |
+| Forma Normal  | Aplicação no VOLTA                                                        |
+| ------------- | --------------------------------------------------------------------------- |
+| **1FN** | Cada tabela possui chave primária e atributos individuais                  |
+| **2FN** | Os atributos dependem completamente da identificação do registro          |
 | **3FN** | Entidades e informações relacionadas foram separadas em tabelas próprias |
 
 ---
@@ -593,7 +624,8 @@ Role
 ```text
 Waste Type
    │
-   └── Incident
+   ├── Incident
+   └── Cooperative Waste Type ─── Cooperative
 ```
 
 ```text
@@ -621,6 +653,8 @@ Conversation
 ```
 
 Essa separação contribui para reduzir a duplicação e manter os dados organizados.
+
+A tabela `cooperative_waste_type` estabelece a relação muitos-para-muitos entre `cooperative` e `waste_type`, permitindo associar cada cooperativa aos tipos de resíduos que aceita.
 
 ---
 
@@ -670,15 +704,15 @@ Novas funcionalidades podem ser adicionadas sem necessariamente modificar as est
 
 Cada tabela possui uma responsabilidade específica.
 
-| Entidade | Responsabilidade |
-|---|---|
-| `company` | Empresas |
-| `users` | Usuários |
-| `incident` | Ocorrências |
-| `collection` | Coletas |
+| Entidade              | Responsabilidade     |
+| --------------------- | -------------------- |
+| `company`           | Empresas             |
+| `users`             | Usuários            |
+| `incident`          | Ocorrências         |
+| `collection`        | Coletas              |
 | `collection_status` | Histórico de status |
-| `review` | Avaliações |
-| `esg_metric` | Métricas ESG |
+| `review`            | Avaliações         |
+| `esg_metric`        | Métricas ESG        |
 
 ---
 
@@ -702,3 +736,5 @@ Dessa forma, a modelagem contribui para:
 - evitar anomalias;
 - organizar as relações entre entidades;
 - permitir a evolução futura do sistema.
+
+<pre class="vditor-reset" placeholder="" contenteditable="true" spellcheck="false"><hr data-block="0" class=""/></pre>
