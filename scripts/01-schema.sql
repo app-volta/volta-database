@@ -404,6 +404,8 @@ CHECK (
 
 ALTER TABLE company
 ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+
+ALTER TABLE company
 ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
 -- ============================================================
