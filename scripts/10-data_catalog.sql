@@ -83,6 +83,9 @@ FROM (VALUES
     ('cooperative','address','VARCHAR(255)','Endereço da cooperativa.','Informação cadastral da organização.','SENSITIVE',FALSE,FALSE,FALSE),
     ('cooperative','average_rating','DECIMAL','Avaliação média da cooperativa.','Calculada a partir das avaliações recebidas.','PUBLIC',FALSE,FALSE,TRUE),
 
+    ('cooperative_waste_type','cooperative_id','UUID','Chave estrangeira para cooperativa.','Deve referenciar cooperative.id.','INTERNAL',FALSE,TRUE,FALSE),
+    ('cooperative_waste_type','waste_type_id','UUID','Chave estrangeira para tipo de resíduo.','Deve referenciar waste_type.id.','INTERNAL',FALSE,TRUE,FALSE),
+
     ('collection','id','UUID','Identificador da coleta.','Gerado por gen_random_uuid().','INTERNAL',TRUE,FALSE,FALSE),
     ('collection','incident_id','UUID','Ocorrência relacionada à coleta.','Deve referenciar incident.','INTERNAL',FALSE,TRUE,TRUE),
     ('collection','cooperative_id','UUID','Cooperativa responsável pela coleta.','Deve referenciar cooperative.','INTERNAL',FALSE,TRUE,FALSE),

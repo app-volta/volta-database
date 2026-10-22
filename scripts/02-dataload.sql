@@ -56,6 +56,43 @@ INSERT INTO waste_type (category,description,default_risk_level) VALUES
 ('WOOD','Madeira e derivados','MEDIUM'),
 ('MIXED','Resíduos recicláveis misturados','MEDIUM');
 
+INSERT INTO cooperative_waste_type (cooperative_id, waste_type_id)
+SELECT c.id, wt.id
+FROM (
+    VALUES
+        ('11.111.111/0001-01', 'PLASTIC'),
+        ('11.111.111/0001-01', 'PAPER'),
+        ('11.111.111/0001-01', 'METAL'),
+        ('22.222.222/0001-02', 'PAPER'),
+        ('33.333.333/0001-03', 'GLASS'),
+        ('33.333.333/0001-03', 'PLASTIC'),
+        ('44.444.444/0001-04', 'PLASTIC'),
+        ('44.444.444/0001-04', 'ORGANIC'),
+        ('55.555.555/0001-05', 'METAL'),
+        ('55.555.555/0001-05', 'ELECTRONIC'),
+        ('66.666.666/0001-06', 'GLASS'),
+        ('66.666.666/0001-06', 'PAPER'),
+        ('77.777.777/0001-07', 'PLASTIC'),
+        ('77.777.777/0001-07', 'METAL'),
+        ('88.888.888/0001-08', 'PAPER'),
+        ('88.888.888/0001-08', 'PLASTIC'),
+        ('88.888.888/0001-08', 'GLASS'),
+        ('99.999.999/0001-09', 'CHEMICAL'),
+        ('10.101.010/0001-10', 'ORGANIC'),
+        ('20.202.020/0001-11', 'METAL'),
+        ('20.202.020/0001-11', 'PLASTIC'),
+        ('30.303.030/0001-12', 'ELECTRONIC'),
+        ('40.404.040/0001-13', 'PAPER'),
+        ('40.404.040/0001-13', 'GLASS'),
+        ('50.505.050/0001-14', 'PLASTIC'),
+        ('50.505.050/0001-14', 'ORGANIC'),
+        ('60.606.060/0001-15', 'CHEMICAL'),
+        ('60.606.060/0001-15', 'MIXED')
+) AS mapping(cooperative_cnpj, waste_category)
+JOIN cooperative c ON c.cnpj = mapping.cooperative_cnpj
+JOIN waste_type wt ON wt.category = mapping.waste_category
+ON CONFLICT (cooperative_id, waste_type_id) DO NOTHING;
+
 -- ============================================================
 -- 2. USERS (40)
 -- ============================================================

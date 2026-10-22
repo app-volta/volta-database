@@ -401,3 +401,30 @@ CHECK (
         AND cooperative_id IS NOT NULL
     )
 );
+
+ALTER TABLE company
+ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+
+ALTER TABLE company
+ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+
+-- ============================================================
+-- 18. COOPERATIVE_WASTE_TYPE
+-- Relaciona cooperativas aos tipos de residuos que aceitam.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS cooperative_waste_type (
+    cooperative_id UUID NOT NULL,
+    waste_type_id UUID NOT NULL,
+
+    CONSTRAINT pk_cooperative_waste_type
+        PRIMARY KEY (cooperative_id, waste_type_id),
+
+    CONSTRAINT fk_cwt_cooperative
+        FOREIGN KEY (cooperative_id)
+        REFERENCES cooperative(id),
+
+    CONSTRAINT fk_cwt_waste_type
+        FOREIGN KEY (waste_type_id)
+        REFERENCES waste_type(id)
+);
