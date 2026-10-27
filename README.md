@@ -49,7 +49,7 @@ MongoDB é utilizado no domínio de conversas e Redis atende consultas de rankin
 
 ## Modelo relacional
 
-O schema relacional atual possui **17 tabelas de negócio**, com nomes em inglês e chaves primárias do tipo UUID:
+O schema relacional atual possui **17 tabelas de negócio**, com nomes em inglês e chaves primárias do tipo UUID. A nomenclatura das categorias de resíduos em `waste_type.category`, porém, foi padronizada em português e sem acentos para facilitar o uso consistente desses valores pela aplicação:
 
 | Domínio                    | Tabelas                                                                                 |
 | --------------------------- | --------------------------------------------------------------------------------------- |
@@ -67,6 +67,27 @@ Além delas, o processo de migração utiliza três tabelas operacionais:
 Essas tabelas são utilizadas para controle e rastreabilidade da migração e **não fazem parte das 17 entidades de negócio**.
 
 A documentação detalhada das tabelas, campos, constraints e relacionamentos está disponível em `schema.md`.
+
+### Categorias de resíduos
+
+Os valores de `waste_type.category` foram padronizados para português, sem acentos:
+
+| Categoria   | Valor armazenado |
+| ----------- | ---------------- |
+| Plástico   | `PLASTICO`     |
+| Papel       | `PAPEL`        |
+| Vidro       | `VIDRO`        |
+| Metal       | `METAL`        |
+| Orgânico   | `ORGANICO`     |
+| Eletrônico | `ELETRONICO`   |
+| Químico    | `QUIMICO`      |
+| Têxtil     | `TEXTIL`       |
+| Madeira     | `MADEIRA`      |
+| Misto       | `MISTO`        |
+
+A atualização altera apenas os valores de `category`; os UUIDs, as descrições, os níveis de risco e os relacionamentos por `waste_type.id` são preservados. As tabelas `incident` e `cooperative_waste_type` continuam referenciando os resíduos pelo ID.
+
+> **Compatibilidade:** a API e o site devem usar os novos valores ou adaptar o mapeamento entre os valores internos e os rótulos exibidos. Código que ainda espere categorias em inglês, como `PLASTIC` ou `ELECTRONIC`, precisa ser revisado.
 
 ### Normalização
 
@@ -215,14 +236,14 @@ Para testar especificamente a migração do legado, **não execute o dataload at
 
 O dataload atual fornece mais de 700 registros fictícios e coerentes para testes, demonstrações, relatórios e validação de consultas.
 
-A distribuição planejada totaliza **714 registros** entre as 17 tabelas.
+O dataload fornece registros fictícios distribuídos entre as 17 tabelas de negócio. Como a massa de dados foi atualizada para remover a role `OPERATOR`, confira a contagem atual diretamente no banco após executar o script, em vez de assumir um total histórico fixo.
 
 Ele inclui, entre outros:
 
 - empresas;
 - usuários;
 - áreas;
-- tipos de resíduos;
+- tipos de resíduos, com categorias padronizadas em português;
 - ocorrências;
 - relatórios de IA;
 - anexos;
@@ -606,6 +627,12 @@ Chaves estrangeiras conectam as entidades e impedem referências inválidas.
 ### Indicadores ESG
 
 `esg_metric` mantém medições históricas por empresa e período.
+
+### Roles e usuários
+
+As roles mantidas no schema são `ADMIN`, `MANAGER` e `EMPLOYEE`. A role `OPERATOR` foi descontinuada por não apresentar diferenças funcionais relevantes em relação a `EMPLOYEE`; os usuários anteriormente associados a `OPERATOR` foram migrados para `EMPLOYEE`. Os scripts `schema.sql` e `dataload.sql` foram atualizados para não recriar a role removida.
+
+> A remoção da role no banco de dados não substitui a revisão das regras de autorização na API. O código da aplicação deve refletir as roles atualmente suportadas.
 
 ### Separação de responsabilidades
 
