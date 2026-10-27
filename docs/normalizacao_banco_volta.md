@@ -117,7 +117,7 @@ company_id
 role_id
 name
 email
-password_hash
+passooword_hash
 position
 ```
 
