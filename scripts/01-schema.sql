@@ -428,3 +428,22 @@ CREATE TABLE IF NOT EXISTS cooperative_waste_type (
         FOREIGN KEY (waste_type_id)
         REFERENCES waste_type(id)
 );
+
+UPDATE waste_type
+SET category = CASE category
+    WHEN 'PLASTIC'     THEN 'PLASTICO'
+    WHEN 'PAPER'       THEN 'PAPEL'
+    WHEN 'GLASS'       THEN 'VIDRO'
+    WHEN 'METAL'       THEN 'METAL'
+    WHEN 'ORGANIC'     THEN 'ORGANICO'
+    WHEN 'ELECTRONIC'  THEN 'ELETRONICO'
+    WHEN 'CHEMICAL'    THEN 'QUIMICO'
+    WHEN 'TEXTILE'     THEN 'TEXTIL'
+    WHEN 'WOOD'        THEN 'MADEIRA'
+    WHEN 'MIXED'       THEN 'MISTO'
+    ELSE category
+END
+WHERE category IN (
+    'PLASTIC', 'PAPER', 'GLASS', 'METAL', 'ORGANIC',
+    'ELECTRONIC', 'CHEMICAL', 'TEXTILE', 'WOOD', 'MIXED'
+);
