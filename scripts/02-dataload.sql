@@ -10,7 +10,7 @@ BEGIN;
 -- ============================================================
 
 INSERT INTO role (type) VALUES
-('ADMIN'),('MANAGER'),('EMPLOYEE'),('OPERATOR')
+('ADMIN'),('MANAGER'),('EMPLOYEE')
 ON CONFLICT (type) DO NOTHING;
 
 INSERT INTO company (name, cnpj, address, is_available) VALUES
@@ -104,7 +104,7 @@ SELECT
   'Usuário VOLTA '||g,
   'usuario'||g||'@volta.local',
   '$2a$10$hash_ficticio_dataload_'||g,
-  (ARRAY['Analista Ambiental','Operador','Supervisor','Gerente','Técnico'])[(g%5)+1]
+  (ARRAY['Analista Ambiental','Supervisor','Gerente','Técnico'])[(g%5)+1]
 FROM generate_series(1,40) g
 ON CONFLICT (email) DO NOTHING;
 
