@@ -447,3 +447,11 @@ WHERE category IN (
     'PLASTIC', 'PAPER', 'GLASS', 'METAL', 'ORGANIC',
     'ELECTRONIC', 'CHEMICAL', 'TEXTILE', 'WOOD', 'MIXED'
 );
+
+UPDATE users
+SET role_id = 'cfdfa46f-dc1e-4442-bf2e-1d0a307edfa8'
+WHERE role_id = '91a5199b-8722-45ff-997a-d065d456f935';
+
+DELETE FROM role
+WHERE id = '91a5199b-8722-45ff-997a-d065d456f935'
+  AND type = 'OPERATOR';

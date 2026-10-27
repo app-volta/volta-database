@@ -45,10 +45,10 @@ Não possui chaves estrangeiras. É referenciada por `users`, `area`, `incident`
 
 Armazena os papéis associados aos usuários.
 
-| Campo    | Tipo            | Regras                           | Descrição             |
-| -------- | --------------- | -------------------------------- | ----------------------- |
-| `id`   | `UUID`        | PK, padrão`gen_random_uuid()` | Identificador do papel. |
-| `type` | `VARCHAR(50)` | `NOT NULL`, `UNIQUE`         | Nome ou tipo do papel.  |
+| Campo    | Tipo             | Regras                           | Descrição             |
+| -------- | ---------------- | -------------------------------- | ----------------------- |
+| `id`   | `UUID`         | PK, padrão`gen_random_uuid()` | Identificador do papel. |
+| `type` |  `VARCHAR(50)` | `NOT NULL`, `UNIQUE`         | Nome ou tipo do papel.  |
 
 O esquema garante que não existam dois papéis com o mesmo valor em `type`. A tabela é referenciada por `users`.
 
@@ -376,7 +376,7 @@ company ──────────► users ──────────�
    │                       ▼         │
    │                  cooperative ───┘
    │                       │
-   │          cooperative_waste_type (N:N)    
+   │          cooperative_waste_type (N:N)  
    │                       ▼
    └─────────────────────────► waste_type
    │
