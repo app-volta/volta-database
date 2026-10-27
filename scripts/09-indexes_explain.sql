@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- ============================================================
--- 1. CONSULTAS BASE PARA ANALISE
+-- 1. CONSULTAS BASE PARA ANÁLISE
 -- ============================================================
 -- A ideia é executar os EXPLAIN ANALYZE primeiro,
 -- observar o plano de execução e depois criar os índices.

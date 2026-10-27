@@ -45,49 +45,49 @@ INSERT INTO cooperative (name,cnpj,latitude,longitude,average_rating,specialties
 ON CONFLICT (cnpj) DO NOTHING;
 
 INSERT INTO waste_type (category,description,default_risk_level) VALUES
-('PLASTIC','Resíduos plásticos recicláveis','LOW'),
-('PAPER','Papel e papelão para reciclagem','LOW'),
-('GLASS','Garrafas e materiais de vidro','MEDIUM'),
+('PLASTICO','Resíduos plásticos recicláveis','LOW'),
+('PAPEL','Papel e papelão para reciclagem','LOW'),
+('VIDRO','Garrafas e materiais de vidro','MEDIUM'),
 ('METAL','Latas, alumínio e metais diversos','LOW'),
-('ORGANIC','Resíduos orgânicos biodegradáveis','MEDIUM'),
-('ELECTRONIC','Equipamentos e componentes eletrônicos','HIGH'),
-('CHEMICAL','Resíduos químicos industriais','HIGH'),
-('TEXTILE','Tecidos e materiais têxteis','LOW'),
-('WOOD','Madeira e derivados','MEDIUM'),
-('MIXED','Resíduos recicláveis misturados','MEDIUM');
+('ORGANICO','Resíduos orgânicos biodegradáveis','MEDIUM'),
+('ELECTRONICO','Equipamentos e componentes eletrônicos','HIGH'),
+('QUIMICO','Resíduos químicos industriais','HIGH'),
+('TEXTIL','Tecidos e materiais têxteis','LOW'),
+('MADEIRA','Madeira e derivados','MEDIUM'),
+('MISTO','Resíduos recicláveis misturados','MEDIUM');
 
 INSERT INTO cooperative_waste_type (cooperative_id, waste_type_id)
 SELECT c.id, wt.id
 FROM (
     VALUES
-        ('11.111.111/0001-01', 'PLASTIC'),
-        ('11.111.111/0001-01', 'PAPER'),
+        ('11.111.111/0001-01', 'PLASTICO'),
+        ('11.111.111/0001-01', 'PAPEL'),
         ('11.111.111/0001-01', 'METAL'),
-        ('22.222.222/0001-02', 'PAPER'),
-        ('33.333.333/0001-03', 'GLASS'),
-        ('33.333.333/0001-03', 'PLASTIC'),
-        ('44.444.444/0001-04', 'PLASTIC'),
-        ('44.444.444/0001-04', 'ORGANIC'),
+        ('22.222.222/0001-02', 'PAPEL'),
+        ('33.333.333/0001-03', 'VIDRO'),
+        ('33.333.333/0001-03', 'PLASTICO'),
+        ('44.444.444/0001-04', 'PLASTICO'),
+        ('44.444.444/0001-04', 'ORGANICO'),
         ('55.555.555/0001-05', 'METAL'),
-        ('55.555.555/0001-05', 'ELECTRONIC'),
-        ('66.666.666/0001-06', 'GLASS'),
-        ('66.666.666/0001-06', 'PAPER'),
-        ('77.777.777/0001-07', 'PLASTIC'),
+        ('55.555.555/0001-05', 'ELECTRONICO'),
+        ('66.666.666/0001-06', 'VIDRO'),
+        ('66.666.666/0001-06', 'PAPEL'),
+        ('77.777.777/0001-07', 'PLASTICO'),
         ('77.777.777/0001-07', 'METAL'),
-        ('88.888.888/0001-08', 'PAPER'),
-        ('88.888.888/0001-08', 'PLASTIC'),
-        ('88.888.888/0001-08', 'GLASS'),
-        ('99.999.999/0001-09', 'CHEMICAL'),
-        ('10.101.010/0001-10', 'ORGANIC'),
+        ('88.888.888/0001-08', 'PAPEL'),
+        ('88.888.888/0001-08', 'PLASTICO'),
+        ('88.888.888/0001-08', 'VIDRO'),
+        ('99.999.999/0001-09', 'QUIMICO'),
+        ('10.101.010/0001-10', 'ORGANICO'),
         ('20.202.020/0001-11', 'METAL'),
-        ('20.202.020/0001-11', 'PLASTIC'),
-        ('30.303.030/0001-12', 'ELECTRONIC'),
-        ('40.404.040/0001-13', 'PAPER'),
-        ('40.404.040/0001-13', 'GLASS'),
-        ('50.505.050/0001-14', 'PLASTIC'),
-        ('50.505.050/0001-14', 'ORGANIC'),
-        ('60.606.060/0001-15', 'CHEMICAL'),
-        ('60.606.060/0001-15', 'MIXED')
+        ('20.202.020/0001-11', 'PLASTICO'),
+        ('30.303.030/0001-12', 'ELECTRONICO'),
+        ('40.404.040/0001-13', 'PAPEL'),
+        ('40.404.040/0001-13', 'VIDRO'),
+        ('50.505.050/0001-14', 'PLASTICO'),
+        ('50.505.050/0001-14', 'ORGANICO'),
+        ('60.606.060/0001-15', 'QUIMICO'),
+        ('60.606.060/0001-15', 'MISTO')
 ) AS mapping(cooperative_cnpj, waste_category)
 JOIN cooperative c ON c.cnpj = mapping.cooperative_cnpj
 JOIN waste_type wt ON wt.category = mapping.waste_category

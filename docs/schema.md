@@ -30,14 +30,14 @@ id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 
 Representa as empresas atendidas pela plataforma.
 
-| Campo       | Tipo               | Regras                           | Descrição                                                                             |
-| ----------- | ------------------ | -------------------------------- | --------------------------------------------------------------------------------------- |
-| `id`      | `UUID`           | PK, padrão`gen_random_uuid()` | Identificador da empresa.                                                               |
-| `name`    | `VARCHAR(150)`   | `NOT NULL`                     | Nome da empresa.                                                                        |
-| `cnpj`    | `VARCHAR(18)`    | `NOT NULL`, `UNIQUE`         | CNPJ da empresa. Criado inicialmente como`VARCHAR(14)` e ampliado ao final do script. |
-| `address` | `VARCHAR(255)`   | `NOT NULL`                     | Endereço da empresa.                                                                   |
-| `latitude`| `DOUBLE PRECISION`| (pode ser NULL)                | Coordenada geográfica de latitude da empresa.                                            |
-| `longitude`| `DOUBLE PRECISION`| (pode ser NULL)                | Coordenada geográfica de longitude da empresa.                                           |
+| Campo         | Tipo                 | Regras                           | Descrição                                                                             |
+| ------------- | -------------------- | -------------------------------- | --------------------------------------------------------------------------------------- |
+| `id`        | `UUID`             | PK, padrão`gen_random_uuid()` | Identificador da empresa.                                                               |
+| `name`      | `VARCHAR(150)`     | `NOT NULL`                     | Nome da empresa.                                                                        |
+| `cnpj`      | `VARCHAR(18)`      | `NOT NULL`, `UNIQUE`         | CNPJ da empresa. Criado inicialmente como`VARCHAR(14)` e ampliado ao final do script. |
+| `address`   | `VARCHAR(255)`     | `NOT NULL`                     | Endereço da empresa.                                                                   |
+| `latitude`  | `DOUBLE PRECISION` | (pode ser NULL)                  | Coordenada geográfica de latitude da empresa.                                          |
+| `longitude` | `DOUBLE PRECISION` | (pode ser NULL)                  | Coordenada geográfica de longitude da empresa.                                         |
 
 Não possui chaves estrangeiras. É referenciada por `users`, `area`, `incident`, `conversation` e `esg_metric`.
 
@@ -172,10 +172,10 @@ A tabela é referenciada por `collection`, `review` e `conversation`.
 
 Tabela de associação N:N que relaciona cooperativas a tipos de resíduos.
 
-| Campo            | Tipo   | Regras                     | Descrição |
-| ---------------- | ------ | -------------------------- | --------- |
-| `cooperative_id`| `UUID` | `NOT NULL`, FK → `cooperative.id` | Referência à cooperativa. |
-| `waste_type_id` | `UUID` | `NOT NULL`, FK → `waste_type.id`   | Referência ao tipo de resíduo. |
+| Campo              | Tipo     | Regras                                 | Descrição                      |
+| ------------------ | -------- | -------------------------------------- | -------------------------------- |
+| `cooperative_id` | `UUID` | `NOT NULL`, FK → `cooperative.id` | Referência à cooperativa.      |
+| `waste_type_id`  | `UUID` | `NOT NULL`, FK → `waste_type.id`  | Referência ao tipo de resíduo. |
 
 **Constraints**
 
@@ -321,33 +321,33 @@ O esquema não declara unicidade para o par empresa/período e não calcula auto
 
 Todas as FKs obrigatórias usam `NOT NULL`; a única FK opcional é `incident.waste_type_id`. Como o script não declara ações `ON DELETE` ou `ON UPDATE`, aplica-se o comportamento padrão do PostgreSQL.
 
-| Origem                              | Destino             | Interpretação estrutural                                                  |
-| ----------------------------------- | ------------------- | --------------------------------------------------------------------------- |
-| `users.company_id`                | `company.id`      | Uma empresa pode ser referenciada por vários usuários.                    |
-| `users.role_id`                   | `role.id`         | Um papel pode ser referenciado por vários usuários.                       |
-| `area.company_id`                 | `company.id`      | Uma empresa pode possuir várias áreas.                                    |
-| `incident.company_id`             | `company.id`      | Uma empresa pode possuir várias ocorrências.                              |
-| `incident.user_id`                | `users.id`        | Um usuário pode registrar várias ocorrências.                            |
-| `incident.area_id`                | `area.id`         | Uma área pode aparecer em várias ocorrências.                            |
-| `incident.waste_type_id`          | `waste_type.id`   | Um tipo pode classificar várias ocorrências; a associação é opcional.  |
-| `ai_report.incident_id`           | `incident.id`     | Uma ocorrência pode ter vários relatórios no esquema atual.              |
-| `attachment.incident_id`          | `incident.id`     | Uma ocorrência pode ter vários anexos.                                    |
-| `collection.incident_id`          | `incident.id`     | Uma ocorrência pode originar várias coletas no esquema atual.             |
-| `collection.cooperative_id`       | `cooperative.id`  | Uma cooperativa pode executar várias coletas.                              |
-| `collection_status.collection_id` | `collection.id`   | Uma coleta pode ter vários registros de histórico.                        |
-| `review.cooperative_id`           | `cooperative.id`  | Uma cooperativa pode receber várias avaliações.                          |
-| `review.user_id`                  | `users.id`        | Um usuário pode criar várias avaliações.                                |
-| `review.collection_id`            | `collection.id`   | Uma coleta pode ser referenciada por várias avaliações no esquema atual. |
-| `conversation.company_id`         | `company.id`      | Uma empresa pode participar de várias conversas.                           |
-| `conversation.cooperative_id`     | `cooperative.id`  | Uma cooperativa pode participar de várias conversas.                       |
-| `conversation.collection_id`      | `collection.id`   | Uma coleta pode ser associada a várias conversas no esquema atual.         |
-| `message.conversation_id`         | `conversation.id` | Uma conversa pode conter várias mensagens.                                 |
-| `message.user_id`                 | `users.id`        | Um usuário pode enviar várias mensagens.                                  |
-| `message_attachment.message_id`   | `message.id`      | Uma mensagem pode possuir vários anexos.                                   |
-| `notification.user_id`            | `users.id`        | Um usuário pode receber várias notificações.                            |
-| `esg_metric.company_id`           | `company.id`      | Uma empresa pode possuir várias métricas ESG.                             |
-| `cooperative_waste_type.cooperative_id` | `cooperative.id` | Associação N:N: cooperativa pode ter vários tipos de resíduos. |
-| `cooperative_waste_type.waste_type_id` | `waste_type.id`  | Associação N:N: tipo de resíduo pode estar em várias cooperativas. |
+| Origem                                    | Destino             | Interpretação estrutural                                                  |
+| ----------------------------------------- | ------------------- | --------------------------------------------------------------------------- |
+| `users.company_id`                      | `company.id`      | Uma empresa pode ser referenciada por vários usuários.                    |
+| `users.role_id`                         | `role.id`         | Um papel pode ser referenciado por vários usuários.                       |
+| `area.company_id`                       | `company.id`      | Uma empresa pode possuir várias áreas.                                    |
+| `incident.company_id`                   | `company.id`      | Uma empresa pode possuir várias ocorrências.                              |
+| `incident.user_id`                      | `users.id`        | Um usuário pode registrar várias ocorrências.                            |
+| `incident.area_id`                      | `area.id`         | Uma área pode aparecer em várias ocorrências.                            |
+| `incident.waste_type_id`                | `waste_type.id`   | Um tipo pode classificar várias ocorrências; a associação é opcional.  |
+| `ai_report.incident_id`                 | `incident.id`     | Uma ocorrência pode ter vários relatórios no esquema atual.              |
+| `attachment.incident_id`                | `incident.id`     | Uma ocorrência pode ter vários anexos.                                    |
+| `collection.incident_id`                | `incident.id`     | Uma ocorrência pode originar várias coletas no esquema atual.             |
+| `collection.cooperative_id`             | `cooperative.id`  | Uma cooperativa pode executar várias coletas.                              |
+| `collection_status.collection_id`       | `collection.id`   | Uma coleta pode ter vários registros de histórico.                        |
+| `review.cooperative_id`                 | `cooperative.id`  | Uma cooperativa pode receber várias avaliações.                          |
+| `review.user_id`                        | `users.id`        | Um usuário pode criar várias avaliações.                                |
+| `review.collection_id`                  | `collection.id`   | Uma coleta pode ser referenciada por várias avaliações no esquema atual. |
+| `conversation.company_id`               | `company.id`      | Uma empresa pode participar de várias conversas.                           |
+| `conversation.cooperative_id`           | `cooperative.id`  | Uma cooperativa pode participar de várias conversas.                       |
+| `conversation.collection_id`            | `collection.id`   | Uma coleta pode ser associada a várias conversas no esquema atual.         |
+| `message.conversation_id`               | `conversation.id` | Uma conversa pode conter várias mensagens.                                 |
+| `message.user_id`                       | `users.id`        | Um usuário pode enviar várias mensagens.                                  |
+| `message_attachment.message_id`         | `message.id`      | Uma mensagem pode possuir vários anexos.                                   |
+| `notification.user_id`                  | `users.id`        | Um usuário pode receber várias notificações.                            |
+| `esg_metric.company_id`                 | `company.id`      | Uma empresa pode possuir várias métricas ESG.                             |
+| `cooperative_waste_type.cooperative_id` | `cooperative.id`  | Associação N:N: cooperativa pode ter vários tipos de resíduos.          |
+| `cooperative_waste_type.waste_type_id`  | `waste_type.id`   | Associação N:N: tipo de resíduo pode estar em várias cooperativas.      |
 
 ## Fluxo textual dos relacionamentos
 
@@ -376,7 +376,7 @@ company ──────────► users ──────────�
    │                       ▼         │
    │                  cooperative ───┘
    │                       │
-   │          cooperative_waste_type (N:N)      
+   │          cooperative_waste_type (N:N)    
    │                       ▼
    └─────────────────────────► waste_type
    │
