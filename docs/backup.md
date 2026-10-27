@@ -185,7 +185,7 @@ UNION ALL SELECT 'incident', COUNT(*) FROM incident
 UNION ALL SELECT 'collection', COUNT(*) FROM collection
 UNION ALL SELECT 'collection_status', COUNT(*) FROM collection_status
 UNION ALL SELECT 'message', COUNT(*) FROM message
-UNION ALL SELECT 'esg_almetric', COUNT(*) FROM esg_metric
+UNION ALL SELECT 'esg_metric', COUNT(*) FROM esg_metric
 ORDER BY table_name;
 "@
 
