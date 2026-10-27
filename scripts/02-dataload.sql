@@ -151,7 +151,7 @@ CROSS JOIN LATERAL (
 
 INSERT INTO ai_report
 (incident_id,detected_waste_type,ai_contamination_level,recommendations,report_text,generated_at)
-SELECT i.id, COALESCE(w.category,'MIXED'),
+SELECT i.id, COALESCE(w.category,'MISTO'),
        (ARRAY['LOW','MEDIUM','HIGH'])[(row_number() OVER ()%3)+1],
        'Separar materiais, verificar contaminação e encaminhar para coleta adequada.',
        'Relatório fictício gerado pela IA para a ocorrência.',
