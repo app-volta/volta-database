@@ -458,3 +458,6 @@ WHERE id = '91a5199b-8722-45ff-997a-d065d456f935'
 
 ALTER TABLE users
 ADD COLUMN photo_url VARCHAR(2048);
+
+ALTER TABLE incident
+ADD COLUMN ai_description TEXT;
