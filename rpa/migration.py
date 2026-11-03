@@ -1,16 +1,14 @@
 # migration.py
-"""Script de migração – sincroniza o banco PostgreSQL legado para o esquema consolidado Volta.
+"""Script de migracao – sincroniza o banco PostgreSQL legado para o esquema consolidado Volta.
 
-O script roda indefinidamente, executando uma sincronização completa (INSERT/UPDATE/DELETE) a cada ``SYNC_INTERVAL`` segundos.
-Ele utiliza as tabelas de controle definidas em ``migration.sql`` (migration_run, migration_id_map,
-migration_error e migration_relation_map) para registrar quais linhas já foram migradas e para registrar erros.
+O script roda indefinidamente, executando uma sincronizacao completa (INSERT/UPDATE/DELETE) a cada SYNC_INTERVAL segundos.
+Ele utiliza as tabelas de controle definidas em 13-migration_control.sql (migration_run, migration_id_map,
+migration_error e migration_relation_map) para registrar quais linhas ja foram migradas e para registrar erros.
 
-A configuração é feita via variáveis de ambiente:
-    LEGACY_URL – string de conexão ao banco legado (PKs inteiros)
-    DATABASE_URL – string de conexão ao novo banco Volta (PKs UUID)
-    SYNC_INTERVAL – segundos entre ciclos de sincronização (padrão: 10)
-
-O script pressupõe que o banco de destino já contém as tabelas de controle e o esquema consolidado (veja ``01-schema.sql``). Ele **não** modifica registros das tabelas de referência ``role`` e ``waste_type`` – esses são buscados pelos seus valores textuais. Caso ``collection_type`` seja ``NULL``, o erro é registrado e a linha é ignorada. A tabela ``complaint`` é totalmente ignorada.
+A configuracao e feita via variaveis de ambiente:
+    LEGACY_URL – string de conexao ao banco legado (PKs inteiros)
+    DATABASE_URL – string de conexao ao novo banco Volta (PKs UUID)
+    SYNC_INTERVAL – segundos entre ciclos de sincronizacao (padrao: 10)
 """
 
 import os
@@ -21,21 +19,19 @@ import unicodedata
 from typing import Any, Tuple, Optional
 from datetime import datetime
 
-
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 # ---------------------------------------------------------------------------
-# Configuração
+# Configuracao
 # ---------------------------------------------------------------------------
 LEGACY_URL = os.getenv("LEGACY_URL")
 DATABASE_URL = os.getenv("DATABASE_URL")
 SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL", "10"))
 
 if not LEGACY_URL or not DATABASE_URL:
-    raise RuntimeError("Variáveis de ambiente LEGACY_URL e DATABASE_URL são obrigatórias.")
+    raise RuntimeError("Variaveis de ambiente LEGACY_URL e DATABASE_URL sao obrigatorias.")
 
-# Logging – grava em arquivo ao lado do script e também no stdout.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -46,10 +42,10 @@ logging.basicConfig(
 )
 
 # ---------------------------------------------------------------------------
-# Classes e funções auxiliares
+# Classes e funcoes auxiliares
 # ---------------------------------------------------------------------------
 class DB:
-    """Wrapper simples para conexão psycopg2 usando cursor de dicionário."""
+    """Wrapper simples para conexao psycopg2 usando cursor de dicionario."""
     def __init__(self, dsn: str):
         self.conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
         self.conn.autocommit = False
@@ -65,9 +61,7 @@ class DB:
         self.conn.close()
 
 def advisory_lock(conn) -> bool:
-    """Obtém um advisory lock do PostgreSQL para evitar execuções simultâneas.
-    Retorna True se o lock foi adquirido, False caso contrário.
-    """
+    """Obtem um advisory lock do PostgreSQL para evitar execucoes simultaneas."""
     with conn.cursor() as cur:
         cur.execute("SELECT pg_try_advisory_lock(8421731);")
         locked = cur.fetchone()["pg_try_advisory_lock"]
@@ -78,8 +72,8 @@ def release_lock(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT pg_advisory_unlock(8421731);")
 
-def record_run_start(conn) -> int:
-    """Registra o início de uma execução e retorna o ID do run."""
+def record_run_start(conn) -> str:
+    """Registra o inicio de uma execucao e retorna o UUID do run."""
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -90,11 +84,11 @@ def record_run_start(conn) -> int:
         )
         run_id = cur.fetchone()["id"]
     conn.commit()
-    return run_id
+    return str(run_id)
 
 def record_run_finish(
     conn, 
-    run_id: int, 
+    run_id: str, 
     success: bool, 
     migrated: int, 
     failed: int, 
@@ -104,7 +98,7 @@ def record_run_finish(
     if source_records is None:
         source_records = migrated + failed
 
-    status_str = "SUCCESS" if success else "FAILED"  # <-- Alterado de FAILURE para FAILED
+    status_str = "SUCCESS" if success else "FAILED"
 
     with conn.cursor() as cur:
         cur.execute(
@@ -129,17 +123,17 @@ def record_run_finish(
         )
     conn.commit()
 
-def log_error(conn, run_id: int, table: str, source_id: Any, msg: str):
-    """Grava o erro no banco garantindo que a transação esteja limpa."""
+def log_error(conn, run_id: str, table: str, source_id: Any, msg: str):
+    """Grava o erro no banco garantindo que a transacao esteja limpa."""
     try:
-        conn.rollback()  # Limpa o estado 'aborted transaction'
+        conn.rollback()
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO migration_error (migration_run_id, source_table, source_id, error_message) 
                 VALUES (%s, %s, %s, %s)
                 """,
-                (run_id, table, str(source_id), str(msg)[:1000]),
+                (run_id, table, str(source_id) if source_id is not None else None, str(msg)[:1000]),
             )
         conn.commit()
     except Exception as e:
@@ -154,7 +148,7 @@ def get_uuid_mapping(conn, source_table: str, source_id: int) -> Optional[uuid.U
             (source_table, source_id),
         )
         row = cur.fetchone()
-        return uuid.UUID(row["target_id"]) if row else None
+        return uuid.UUID(str(row["target_id"])) if row else None
 
 def set_uuid_mapping(conn, source_table: str, source_id: int, target_table: str, target_id: uuid.UUID):
     """Insere o mapeamento entre ID de origem e UUID de destino."""
@@ -165,24 +159,45 @@ def set_uuid_mapping(conn, source_table: str, source_id: int, target_table: str,
         )
     conn.commit()
 
+def set_relation_mapping(conn, source_table: str, s1: int, s2: int, target_table: str, t1: uuid.UUID, t2: uuid.UUID):
+    """Registra o de-para para tabelas associativas N:N."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO migration_relation_map (source_table, source_id_1, source_id_2, target_table, target_id_1, target_id_2)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            """,
+            (source_table, s1, s2, target_table, str(t1), str(t2))
+        )
+    conn.commit()
+
+def parse_coord(val: Any, default: float) -> float:
+    """Converte valor para float tratando None, strings e tipos numericos."""
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        return f if f != 0.0 else default
+    except (ValueError, TypeError):
+        return default
+
 # ---------------------------------------------------------------------------
-# Funções de lookup para tabelas de referência (role, waste_type)
+# Lookups de referencia (role, waste_type)
 # ---------------------------------------------------------------------------
 ROLE_MAP = {
     "SYSTEM_ADMIN": ["ADMIN", "ADMINISTRADOR", "ADMINISTRADOR_SISTEMA", "SYSTEM_ADMIN"],
-    "COMPANY_USER": ["USER", "USUARIO", "FUNCIONARIO", "OPERADOR", "COMPANY_USER"],
-    "COOPERATIVE": ["COOPERATIVE", "COOPERATIVA", "OPERADOR_COOPERATIVA"],
+    "COMPANY_USER": ["USER", "USUARIO", "FUNCIONARIO", "OPERADOR", "COMPANY_USER", "EMPLOYEE"],
+    "COOPERATIVE": ["COOPERATIVE", "COOPERATIVA", "OPERADOR_COOPERATIVA", "MANAGER", "EMPLOYEE"],
 }
 
 def lookup_role_uuid(conn, role_type: str) -> Optional[uuid.UUID]:
-    """Busca o UUID de um role com sinônimos e fallback seguro."""
     clean_type = role_type.strip().upper()
     possible_names = ROLE_MAP.get(clean_type, [clean_type])
     if clean_type not in possible_names:
         possible_names.append(clean_type)
 
     with conn.cursor() as cur:
-        # Tenta buscar por qualquer um dos nomes equivalentes
         cur.execute(
             """
             SELECT id FROM role 
@@ -195,7 +210,6 @@ def lookup_role_uuid(conn, role_type: str) -> Optional[uuid.UUID]:
         if row:
             return uuid.UUID(str(row["id"]))
 
-        # Fallback: pega o primeiro role existente para não travar a migração com NOT NULL
         cur.execute("SELECT id FROM role ORDER BY id LIMIT 1")
         row = cur.fetchone()
         return uuid.UUID(str(row["id"])) if row else None
@@ -217,23 +231,26 @@ WASTE_TYPE_MAP = {
     "METAL": "METAL",
     "ORGANICO": "ORGANICO",
     "ORGANIC": "ORGANICO",
-    "RESIDUO CONTAMINADO": "PERIGOSO",
-    "CONTAMINADO": "PERIGOSO",
-    "PERIGOSO": "PERIGOSO",
-    "HAZARDOUS": "PERIGOSO",
-    "ELETRONICO": "ELETRONICO",
-    "ELECTRONIC": "ELETRONICO",
-    "BATERIA": "BATERIA",
-    "BATTERY": "BATERIA",
+    "RESIDUO CONTAMINADO": "QUIMICO",
+    "CONTAMINADO": "QUIMICO",
+    "PERIGOSO": "QUIMICO",
+    "HAZARDOUS": "QUIMICO",
+    "QUIMICO": "QUIMICO",
+    "ELETRONICO": "ELECTRONICO",
+    "ELECTRONIC": "ELECTRONICO",
+    "ELECTRONICO": "ELECTRONICO",
+    "BATERIA": "ELECTRONICO",
+    "BATTERY": "ELECTRONICO",
+    "TEXTIL": "TEXTIL",
+    "MADEIRA": "MADEIRA",
+    "MISTO": "MISTO"
 }
 
 def lookup_waste_type_uuid(conn, category: str) -> Optional[uuid.UUID]:
-    """Busca o UUID do waste_type com fallback automático para qualquer categoria disponível."""
     norm = normalize_text(category)
     mapped = WASTE_TYPE_MAP.get(norm, norm)
     
     with conn.cursor() as cur:
-        # 1. Busca exata ou por termo mapeado
         cur.execute(
             """
             SELECT id FROM waste_type 
@@ -248,7 +265,6 @@ def lookup_waste_type_uuid(conn, category: str) -> Optional[uuid.UUID]:
         if row:
             return uuid.UUID(str(row["id"]))
 
-        # 2. Busca parcial (LIKE)
         cur.execute(
             """
             SELECT id FROM waste_type 
@@ -261,7 +277,6 @@ def lookup_waste_type_uuid(conn, category: str) -> Optional[uuid.UUID]:
         if row:
             return uuid.UUID(str(row["id"]))
 
-        # 3. Fallback: pega o primeiro registro existente na tabela waste_type
         cur.execute("SELECT id FROM waste_type ORDER BY id LIMIT 1")
         row = cur.fetchone()
         if row:
@@ -270,37 +285,47 @@ def lookup_waste_type_uuid(conn, category: str) -> Optional[uuid.UUID]:
     return None
 
 # ---------------------------------------------------------------------------
-# Funções de sincronização – ordem respeitando dependências FK
+# Sincronizacao
 # ---------------------------------------------------------------------------
-def sync_company(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza a tabela company sem depender de colunas inexistentes na origem."""
+def sync_company(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
-        # Puxa tudo o que realmente existe na tabela legada
         src_cur.execute("SELECT * FROM company")
         rows = src_cur.fetchall()
 
     for row in rows:
+        src_id = row["id"]
         try:
-            src_id = row["id"]
             target_uuid = get_uuid_mapping(target_conn, "company", src_id)
             
-            # Pega os valores se existirem no legado, senão define padrões seguros
             name = row.get("name")
             cnpj = row.get("cnpj")
             address = row.get("address")
-            lat = row.get("latitude")
-            lon = row.get("longitude")
-            is_available = row.get("is_available", True)
+            
+            # Puxa latitude e longitude diretamente das chaves (ou fallback de SP caso ausente)
+            raw_lat = row.get("latitude") if "latitude" in row else row.get("lat")
+            raw_lon = row.get("longitude") if "longitude" in row else row.get("lon")
+            lat = parse_coord(raw_lat, -23.550520)
+            lon = parse_coord(raw_lon, -46.633308)
+
+            is_available = row.get("is_available") if row.get("is_available") is not None else True
 
             if not target_uuid:
-                # Checa se a empresa já existe no destino pelo CNPJ
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM company WHERE cnpj = %s", (cnpj,))
                     existing = tgt_cur.fetchone()
 
                 if existing:
                     target_uuid = uuid.UUID(str(existing["id"]))
+                    with target_conn.cursor() as tgt_cur:
+                        tgt_cur.execute(
+                            """
+                            UPDATE company 
+                            SET name=%s, address=%s, latitude=%s, longitude=%s, is_available=%s
+                            WHERE id=%s
+                            """,
+                            (name, address, lat, lon, is_available, str(target_uuid)),
+                        )
                 else:
                     target_uuid = uuid.uuid4()
                     with target_conn.cursor() as tgt_cur:
@@ -314,14 +339,18 @@ def sync_company(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                 set_uuid_mapping(target_conn, "company", src_id, "company", target_uuid)
             else:
                 with target_conn.cursor() as tgt_cur:
-                    tgt_cur.execute("SELECT name, cnpj, address, is_available FROM company WHERE id = %s", (str(target_uuid),))
+                    tgt_cur.execute("SELECT name, cnpj, address, latitude, longitude, is_available FROM company WHERE id = %s", (str(target_uuid),))
                     tgt = tgt_cur.fetchone()
 
-                # Compara apenas o que pode ter mudado
+                tgt_lat = float(tgt.get("latitude")) if tgt.get("latitude") is not None else None
+                tgt_lon = float(tgt.get("longitude")) if tgt.get("longitude") is not None else None
+
                 diff = (
                     name != tgt.get("name")
                     or cnpj != tgt.get("cnpj")
                     or address != tgt.get("address")
+                    or (tgt_lat is None or abs(lat - tgt_lat) > 0.00001)
+                    or (tgt_lon is None or abs(lon - tgt_lon) > 0.00001)
                     or is_available != tgt.get("is_available")
                 )
                 if diff:
@@ -329,38 +358,33 @@ def sync_company(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                         tgt_cur.execute(
                             """
                             UPDATE company 
-                            SET name=%s, cnpj=%s, address=%s, is_available=%s 
+                            SET name=%s, cnpj=%s, address=%s, latitude=%s, longitude=%s, is_available=%s 
                             WHERE id=%s
                             """,
-                            (
-                                name,
-                                cnpj,
-                                address,
-                                is_available,
-                                str(target_uuid),
-                            ),
+                            (name, cnpj, address, lat, lon, is_available, str(target_uuid)),
                         )
+            target_conn.commit()
             processed += 1
         except Exception as e:
+            target_conn.rollback()
             logging.exception("Erro ao sincronizar company id %s", src_id)
             log_error(target_conn, run_id, "company", src_id, str(e))
             failed += 1
 
     return processed, failed
 
-def sync_role(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza a tabela role (apenas mapeamento)."""
+def sync_role(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT id, type FROM role")
         rows = src_cur.fetchall()
     for row in rows:
+        src_id = row["id"]
         try:
-            src_id = row["id"]
             if not get_uuid_mapping(target_conn, "role", src_id):
                 role_uuid = lookup_role_uuid(target_conn, row["type"])
                 if not role_uuid:
-                    raise ValueError(f"Tipo de role '{row['type']}' não encontrado no banco destino")
+                    raise ValueError(f"Tipo de role '{row['type']}' nao encontrado no destino")
                 set_uuid_mapping(target_conn, "role", src_id, "role", role_uuid)
             processed += 1
         except Exception as e:
@@ -369,19 +393,18 @@ def sync_role(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
             failed += 1
     return processed, failed
 
-def sync_waste_type(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza a tabela waste_type (apenas mapeamento)."""
+def sync_waste_type(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT id, category FROM waste_type")
         rows = src_cur.fetchall()
     for row in rows:
+        src_id = row["id"]
         try:
-            src_id = row["id"]
             if not get_uuid_mapping(target_conn, "waste_type", src_id):
                 wt_uuid = lookup_waste_type_uuid(target_conn, row["category"])
                 if not wt_uuid:
-                    raise ValueError(f"Tipo de waste '{row['category']}' não encontrado no banco destino")
+                    raise ValueError(f"Tipo de waste '{row['category']}' nao encontrado no destino")
                 set_uuid_mapping(target_conn, "waste_type", src_id, "waste_type", wt_uuid)
             processed += 1
         except Exception as e:
@@ -390,24 +413,33 @@ def sync_waste_type(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
             failed += 1
     return processed, failed
 
-def sync_cooperative(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza a tabela cooperative adaptando campos ausentes."""
+def sync_cooperative(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT * FROM cooperative")
         rows = src_cur.fetchall()
 
     for row in rows:
+        src_id = row["id"]
         try:
-            src_id = row["id"]
             target_uuid = get_uuid_mapping(target_conn, "cooperative", src_id)
             
             name = row.get("name")
             cnpj = row.get("cnpj")
-            lat = row.get("latitude")
-            lon = row.get("longitude")
-            rating = row.get("average_rating")
-            specialties = row.get("specialties")
+            
+            # Puxa latitude e longitude
+            raw_lat = row.get("latitude") if "latitude" in row else row.get("lat")
+            raw_lon = row.get("longitude") if "longitude" in row else row.get("lon")
+            lat = parse_coord(raw_lat, -23.550520)
+            lon = parse_coord(raw_lon, -46.633308)
+
+            email = row.get("email")
+            if not email:
+                clean_name = normalize_text(name).lower().replace(" ", "")[:15]
+                email = f"contato@{clean_name or 'coop'}.volta.local"
+
+            rating = float(row.get("average_rating") or 4.50)
+            specialties = row.get("specialties") or "Reciclaveis em geral"
 
             if not target_uuid:
                 with target_conn.cursor() as tgt_cur:
@@ -416,40 +448,101 @@ def sync_cooperative(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
 
                 if existing:
                     target_uuid = uuid.UUID(str(existing["id"]))
+                    with target_conn.cursor() as tgt_cur:
+                        tgt_cur.execute(
+                            """
+                            UPDATE cooperative 
+                            SET name=%s, email=%s, latitude=%s, longitude=%s, average_rating=%s, specialties=%s
+                            WHERE id=%s
+                            """,
+                            (name, email, lat, lon, rating, specialties, str(target_uuid)),
+                        )
                 else:
                     target_uuid = uuid.uuid4()
                     with target_conn.cursor() as tgt_cur:
                         tgt_cur.execute(
                             """
-                            INSERT INTO cooperative (id, name, cnpj, latitude, longitude, average_rating, specialties)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO cooperative (id, name, cnpj, email, latitude, longitude, average_rating, specialties)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """,
-                            (str(target_uuid), name, cnpj, lat, lon, rating, specialties),
+                            (str(target_uuid), name, cnpj, email, lat, lon, rating, specialties),
                         )
                 set_uuid_mapping(target_conn, "cooperative", src_id, "cooperative", target_uuid)
             else:
                 with target_conn.cursor() as tgt_cur:
-                    tgt_cur.execute("SELECT name, cnpj FROM cooperative WHERE id = %s", (str(target_uuid),))
+                    tgt_cur.execute("SELECT name, cnpj, email, latitude, longitude FROM cooperative WHERE id = %s", (str(target_uuid),))
                     tgt = tgt_cur.fetchone()
 
-                if name != tgt.get("name") or cnpj != tgt.get("cnpj"):
+                tgt_lat = float(tgt.get("latitude")) if tgt.get("latitude") is not None else None
+                tgt_lon = float(tgt.get("longitude")) if tgt.get("longitude") is not None else None
+
+                diff = (
+                    name != tgt.get("name")
+                    or cnpj != tgt.get("cnpj")
+                    or email != tgt.get("email")
+                    or (tgt_lat is None or abs(lat - tgt_lat) > 0.00001)
+                    or (tgt_lon is None or abs(lon - tgt_lon) > 0.00001)
+                )
+                if diff:
                     with target_conn.cursor() as tgt_cur:
                         tgt_cur.execute(
-                            "UPDATE cooperative SET name=%s, cnpj=%s WHERE id=%s",
-                            (name, cnpj, str(target_uuid)),
+                            """
+                            UPDATE cooperative 
+                            SET name=%s, email=%s, latitude=%s, longitude=%s, average_rating=%s, specialties=%s 
+                            WHERE id=%s
+                            """,
+                            (name, email, lat, lon, rating, specialties, str(target_uuid)),
                         )
+            target_conn.commit()
             processed += 1
         except Exception as e:
+            target_conn.rollback()
             logging.exception("Erro ao sincronizar cooperative id %s", src_id)
             log_error(target_conn, run_id, "cooperative", src_id, str(e))
             failed += 1
 
     return processed, failed
 
-DEFAULT_PASSWORD_HASH = "!MIGRATED_USER_MUST_RESET_PASSWORD!"
+def sync_cooperative_waste_types(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
+    processed = failed = 0
+    try:
+        with legacy_conn.cursor() as src_cur:
+            src_cur.execute("SELECT * FROM cooperative_waste_type")
+            rows = src_cur.fetchall()
+    except Exception:
+        legacy_conn.rollback()
+        return 0, 0
 
-def sync_users(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza users tratando e-mails duplicados e fallback de role."""
+    for row in rows:
+        c_id = row.get("cooperative_id")
+        w_id = row.get("waste_type_id")
+        try:
+            target_coop = get_uuid_mapping(target_conn, "cooperative", c_id)
+            target_wt = get_uuid_mapping(target_conn, "waste_type", w_id)
+
+            if target_coop and target_wt:
+                with target_conn.cursor() as tgt_cur:
+                    tgt_cur.execute(
+                        """
+                        INSERT INTO cooperative_waste_type (cooperative_id, waste_type_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (str(target_coop), str(target_wt))
+                    )
+                set_relation_mapping(target_conn, "cooperative_waste_type", c_id, w_id, "cooperative_waste_type", target_coop, target_wt)
+                processed += 1
+        except Exception as e:
+            target_conn.rollback()
+            log_error(target_conn, run_id, "cooperative_waste_type", f"{c_id}:{w_id}", str(e))
+            failed += 1
+
+    target_conn.commit()
+    return processed, failed
+
+DEFAULT_PASSWORD_HASH = "$2b$10$j8Cq0C4oEwUfE9nI6dY2.uV0I5lA5N3l3wUvYm8v1E4K0X8Q9Z5b6"
+
+def sync_users(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT * FROM users")
@@ -468,7 +561,6 @@ def sync_users(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
             coop_uuid = get_uuid_mapping(target_conn, "cooperative", cooperative_id) if cooperative_id else None
             role_uuid = get_uuid_mapping(target_conn, "role", role_id) if role_id else None
 
-            # 1. Fallback se a role não existir (evita NotNullViolation em role_id)
             if not role_uuid:
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM role ORDER BY id LIMIT 1")
@@ -476,30 +568,22 @@ def sync_users(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                     if default_role:
                         role_uuid = uuid.UUID(str(default_role["id"]))
 
-            # 2. Fallback de organização (evita chk_users_organization)
-            if not comp_uuid and not coop_uuid:
+            if comp_uuid and coop_uuid:
+                coop_uuid = None
+            elif not comp_uuid and not coop_uuid:
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM company LIMIT 1")
                     fallback_comp = tgt_cur.fetchone()
                     if fallback_comp:
                         comp_uuid = uuid.UUID(str(fallback_comp["id"]))
 
-            pwd = (
-                row.get("password_hash")
-                or row.get("password")
-                or row.get("senha")
-                or DEFAULT_PASSWORD_HASH
-            )
-
             name = row.get("name")
             email = row.get("email")
-            position = row.get("position")
+            position = row.get("position") or "Colaborador"
             photo_url = row.get("photo_url")
-            registered_at = row.get("registered_at")
-            first_login = True
+            registered_at = row.get("registered_at") or datetime.now().date()
 
             if not target_uuid:
-                # 3. Checa se o usuário já existe pelo e-mail
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM users WHERE email = %s", (email,))
                     existing = tgt_cur.fetchone()
@@ -524,11 +608,11 @@ def sync_users(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                                 str(role_uuid) if role_uuid else None,
                                 name,
                                 email,
-                                pwd,
+                                DEFAULT_PASSWORD_HASH,
                                 position,
                                 photo_url,
                                 registered_at,
-                                True,
+                                False,
                             ),
                         )
                 set_uuid_mapping(target_conn, "users", src_id, "users", target_uuid)
@@ -541,17 +625,16 @@ def sync_users(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                     name != tgt.get("name")
                     or position != tgt.get("position")
                     or photo_url != tgt.get("photo_url")
-                    or tgt.get("first_login") is not True
                 )
                 if diff:
                     with target_conn.cursor() as tgt_cur:
                         tgt_cur.execute(
                             """
                             UPDATE users 
-                            SET name=%s, position=%s, photo_url=%s, first_login=%s 
+                            SET name=%s, position=%s, photo_url=%s 
                             WHERE id=%s
                             """,
-                            (name, position, photo_url, True, str(target_uuid)),
+                            (name, position, photo_url, str(target_uuid)),
                         )
             target_conn.commit()
             processed += 1
@@ -563,15 +646,14 @@ def sync_users(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
 
     return processed, failed
 
-def sync_area(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza a tabela area."""
+def sync_area(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT id, company_id, sector_name, location_description FROM area")
         rows = src_cur.fetchall()
     for row in rows:
+        src_id = row["id"]
         try:
-            src_id = row["id"]
             target_uuid = get_uuid_mapping(target_conn, "area", src_id)
             comp_uuid = get_uuid_mapping(target_conn, "company", row["company_id"])
             if not target_uuid:
@@ -593,15 +675,16 @@ def sync_area(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                             "UPDATE area SET company_id=%s, sector_name=%s, location_description=%s WHERE id=%s",
                             (str(comp_uuid) if comp_uuid else None, row["sector_name"], row["location_description"], str(target_uuid)),
                         )
+            target_conn.commit()
             processed += 1
         except Exception as e:
+            target_conn.rollback()
             logging.exception("Erro ao sincronizar area id %s", src_id)
             log_error(target_conn, run_id, "area", src_id, str(e))
             failed += 1
     return processed, failed
 
-def sync_incident(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza incidents adaptando colunas novas e garantindo FKs válidas."""
+def sync_incident(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT * FROM incident")
@@ -615,7 +698,6 @@ def sync_incident(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
             user_uuid = get_uuid_mapping(target_conn, "users", row.get("user_id"))
             area_uuid = get_uuid_mapping(target_conn, "area", row.get("area_id"))
 
-            # Fallback para company_id (evita NotNullViolation)
             if not comp_uuid:
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM company LIMIT 1")
@@ -623,7 +705,6 @@ def sync_incident(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                     if fb_comp:
                         comp_uuid = uuid.UUID(str(fb_comp["id"]))
 
-            # Fallback para user_id se necessário
             if not user_uuid:
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM users LIMIT 1")
@@ -639,7 +720,7 @@ def sync_incident(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
             status = row.get("status")
             registered_at = row.get("registered_at")
             ai_description = row.get("ai_description")
-            title = row.get("title") or "Incidente Migrado"
+            title = row.get("title") or f"Incidente #{src_id}"
             change_reason = row.get("change_reason")
 
             if not target_uuid:
@@ -690,6 +771,30 @@ def sync_incident(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                             """,
                             (photo_url, contamination_level, estimated_quantity, priority, status, str(target_uuid)),
                         )
+
+            legacy_wt_id = row.get("waste_type_id")
+            if legacy_wt_id:
+                target_wt_uuid = get_uuid_mapping(target_conn, "waste_type", legacy_wt_id)
+                if target_wt_uuid:
+                    with target_conn.cursor() as tgt_cur:
+                        tgt_cur.execute(
+                            """
+                            INSERT INTO incident_waste_type (incident_id, waste_type_id)
+                            VALUES (%s, %s)
+                            ON CONFLICT DO NOTHING
+                            """,
+                            (str(target_uuid), str(target_wt_uuid)),
+                        )
+                    set_relation_mapping(
+                        target_conn,
+                        "incident_waste_type",
+                        src_id,
+                        legacy_wt_id,
+                        "incident_waste_type",
+                        target_uuid,
+                        target_wt_uuid
+                    )
+
             target_conn.commit()
             processed += 1
         except Exception as e:
@@ -700,8 +805,7 @@ def sync_incident(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
 
     return processed, failed
 
-def sync_collection(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
-    """Sincroniza collection com fallback para incident_id e requested_at."""
+def sync_collection(legacy_conn, target_conn, run_id: str) -> Tuple[int, int]:
     processed = failed = 0
     with legacy_conn.cursor() as src_cur:
         src_cur.execute("SELECT * FROM collection")
@@ -716,7 +820,6 @@ def sync_collection(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
             incident_uuid = get_uuid_mapping(target_conn, "incident", row.get("incident_id"))
             coop_uuid = get_uuid_mapping(target_conn, "cooperative", row.get("cooperative_id"))
 
-            # Fallback para incident_id (evita NotNullViolation)
             if not incident_uuid:
                 with target_conn.cursor() as tgt_cur:
                     tgt_cur.execute("SELECT id FROM incident LIMIT 1")
@@ -724,7 +827,6 @@ def sync_collection(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                     if fb_inc:
                         incident_uuid = uuid.UUID(str(fb_inc["id"]))
 
-            # Fallback para requested_at (evita NotNullViolation)
             requested_at = (
                 row.get("requested_at")
                 or row.get("created_at")
@@ -732,7 +834,7 @@ def sync_collection(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
                 or datetime.now()
             )
             scheduled_at = row.get("scheduled_at")
-            current_status = row.get("current_status") or row.get("status") or "SOLICITADA"
+            current_status = row.get("current_status") or row.get("status") or "REQUESTED"
             urgent = bool(row.get("urgent", False))
 
             if not target_uuid:
@@ -787,16 +889,13 @@ def sync_collection(legacy_conn, target_conn, run_id) -> Tuple[int, int]:
 
     return processed, failed
 
-def sync_deletions(legacy_conn, target_conn, table_name: str, run_id: int) -> int:
-    """Detecta registros deletados no legado e remove do destino."""
+def sync_deletions(legacy_conn, target_conn, table_name: str, run_id: str) -> int:
     deleted_count = 0
     try:
-        # 1. Pega todos os IDs que ainda existem no banco legado para essa tabela
         with legacy_conn.cursor() as leg_cur:
             leg_cur.execute(f"SELECT id FROM {table_name}")
             active_legacy_ids = {row["id"] for row in leg_cur.fetchall()}
 
-        # 2. Pega todos os registros mapeados no banco destino para essa tabela
         with target_conn.cursor() as tgt_cur:
             tgt_cur.execute(
                 "SELECT source_id, target_id FROM migration_id_map WHERE source_table = %s",
@@ -804,16 +903,13 @@ def sync_deletions(legacy_conn, target_conn, table_name: str, run_id: int) -> in
             )
             mapped_records = tgt_cur.fetchall()
 
-        # 3. Identifica quais foram excluídos da origem
         for record in mapped_records:
             src_id = int(record["source_id"])
             target_id = record["target_id"]
 
             if src_id not in active_legacy_ids:
                 with target_conn.cursor() as del_cur:
-                    # Remove da tabela real no destino
                     del_cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (str(target_id),))
-                    # Remove do mapa de controle
                     del_cur.execute(
                         "DELETE FROM migration_id_map WHERE source_table = %s AND source_id = %s",
                         (table_name, src_id)
@@ -823,7 +919,7 @@ def sync_deletions(legacy_conn, target_conn, table_name: str, run_id: int) -> in
         target_conn.commit()
     except Exception as e:
         target_conn.rollback()
-        logging.exception("Erro ao sincronizar deleções na tabela %s", table_name)
+        logging.exception("Erro ao sincronizar delecoes na tabela %s", table_name)
         log_error(target_conn, run_id, table_name, "DELETE_BATCH", str(e))
 
     return deleted_count
@@ -832,24 +928,24 @@ def sync_deletions(legacy_conn, target_conn, table_name: str, run_id: int) -> in
 # Loop principal
 # ---------------------------------------------------------------------------
 def main():
-    logging.info("Daemon de migração iniciado – intervalo %s segundos", SYNC_INTERVAL)
+    logging.info("Daemon de migracao iniciado – intervalo %s segundos", SYNC_INTERVAL)
     while True:
         try:
             with DB(LEGACY_URL) as legacy_conn, DB(DATABASE_URL) as target_conn:
                 if not advisory_lock(target_conn):
-                    logging.warning("Outra instância de migração está em execução – ciclo ignorado")
+                    logging.warning("Outra instancia de migracao em execucao – ciclo ignorado")
                     time.sleep(SYNC_INTERVAL)
                     continue
 
                 run_id = record_run_start(target_conn)
                 total_processed = total_failed = 0
 
-                # 1. Sincroniza INSERTs e UPDATEs (ordem direta de dependência)
                 for fn in [
                     sync_company,
                     sync_role,
                     sync_waste_type,
                     sync_cooperative,
+                    sync_cooperative_waste_types,
                     sync_users,
                     sync_area,
                     sync_incident,
@@ -859,7 +955,6 @@ def main():
                     total_processed += proc
                     total_failed += fail
 
-                # 2. Sincroniza DELETEs (ordem reversa para respeitar chaves estrangeiras)
                 for table in [
                     "collection",
                     "incident",
@@ -870,7 +965,7 @@ def main():
                 ]:
                     dels = sync_deletions(legacy_conn, target_conn, table, run_id)
                     if dels > 0:
-                        logging.info("Deletados %d registros órfãos da tabela %s", dels, table)
+                        logging.info("Deletados %d registros orfaos da tabela %s", dels, table)
 
                 record_run_finish(
                     target_conn,
@@ -881,10 +976,10 @@ def main():
                     source_records=(total_processed + total_failed)
                 )
                 release_lock(target_conn)
-                logging.info("Run %s concluído – processados %s, falhas %s", run_id, total_processed, total_failed)
+                logging.info("Run %s concluido – processados %s, falhas %s", run_id, total_processed, total_failed)
 
         except Exception as e:
-            logging.exception("Erro inesperado no loop de migração: %s", e)
+            logging.exception("Erro inesperado no loop de migracao: %s", e)
 
         time.sleep(SYNC_INTERVAL)
 
