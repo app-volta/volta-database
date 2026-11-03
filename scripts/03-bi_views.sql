@@ -1,7 +1,13 @@
+-- ============================================================
 -- Camada analítica (Data Mart) do projeto VOLTA.
--- Execute este script após criar o schema público e popular o banco.
+-- Modelagem Dimensional (Star Schema) adaptada para 3FN (N:N)
+-- ============================================================
 
 CREATE SCHEMA IF NOT EXISTS bi;
+
+-- ------------------------------------------------------------
+-- 1. DIMENSÕES
+-- ------------------------------------------------------------
 
 CREATE OR REPLACE VIEW bi.dim_company AS
 SELECT
@@ -9,6 +15,8 @@ SELECT
     c.name AS company_name,
     c.cnpj,
     c.address,
+    c.latitude,
+    c.longitude,
     c.is_available
 FROM public.company c;
 
@@ -33,10 +41,12 @@ SELECT
     co.id AS cooperative_id,
     co.name AS cooperative_name,
     co.cnpj,
+    co.email,
     co.latitude,
     co.longitude,
     co.average_rating,
-    co.specialties
+    co.specialties,
+    co.created_at
 FROM public.cooperative co;
 
 CREATE OR REPLACE VIEW bi.dim_date AS
@@ -74,13 +84,17 @@ SELECT
     TO_CHAR(date_key, 'YYYY-MM') AS year_month
 FROM calendar;
 
+-- ------------------------------------------------------------
+-- 2. TABELAS FATO
+-- ------------------------------------------------------------
+
 CREATE OR REPLACE VIEW bi.fact_incident AS
 SELECT
     i.id AS incident_id,
     i.company_id,
     i.user_id,
     i.area_id,
-    i.waste_type_id,
+    primary_wt.waste_type_id,
     i.registered_at::date AS date_key,
     EXTRACT(HOUR FROM i.registered_at)::int AS registered_hour,
     i.registered_at,
@@ -98,6 +112,12 @@ SELECT
     ar.ai_contamination_level,
     ar.generated_at AS ai_report_generated_at
 FROM public.incident i
+LEFT JOIN LATERAL (
+    SELECT iwt.waste_type_id
+    FROM public.incident_waste_type iwt
+    WHERE iwt.incident_id = i.id
+    LIMIT 1
+) primary_wt ON TRUE
 LEFT JOIN LATERAL (
     SELECT
         ar.id,
@@ -132,7 +152,7 @@ SELECT
     c.incident_id,
     i.company_id,
     i.area_id,
-    i.waste_type_id,
+    primary_wt.waste_type_id,
     c.cooperative_id,
     c.requested_at::date AS requested_date_key,
     c.scheduled_at::date AS scheduled_date_key,
@@ -154,6 +174,12 @@ SELECT
 FROM public.collection c
 JOIN public.incident i
     ON i.id = c.incident_id
+LEFT JOIN LATERAL (
+    SELECT iwt.waste_type_id
+    FROM public.incident_waste_type iwt
+    WHERE iwt.incident_id = i.id
+    LIMIT 1
+) primary_wt ON TRUE
 LEFT JOIN status_rollup sr
     ON sr.collection_id = c.id;
 
@@ -165,6 +191,9 @@ SELECT
     em.total_waste_kg,
     em.total_recycled_kg,
     em.recycling_percentage,
+    em.weekly_target,
+    em.monthly_target,
+    em.quarterly_target,
     em.calculated_at,
     em.calculated_at::date AS calculated_date_key,
     CASE
@@ -191,6 +220,10 @@ JOIN public.collection c
     ON c.id = r.collection_id
 JOIN public.incident i
     ON i.id = c.incident_id;
+
+-- ------------------------------------------------------------
+-- 3. DATA MARTS PARA DASHBOARDS
+-- ------------------------------------------------------------
 
 CREATE OR REPLACE VIEW bi.mart_occurrences_dashboard AS
 SELECT
@@ -239,6 +272,7 @@ SELECT
     dwt.waste_category,
     fc.cooperative_id,
     dco.cooperative_name,
+    dco.email AS cooperative_email,
     dco.latitude,
     dco.longitude,
     dco.average_rating,

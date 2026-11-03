@@ -39,3 +39,26 @@ CREATE TABLE IF NOT EXISTS migration_error (
     error_message TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Rastreia relacionamentos importados do legado.
+-- Preserva relacionamentos criados diretamente no destino.
+
+CREATE TABLE IF NOT EXISTS migration_relation_map (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    source_table VARCHAR(100) NOT NULL,
+    source_id_1 INTEGER NOT NULL,
+    source_id_2 INTEGER NOT NULL,
+
+    target_table VARCHAR(100) NOT NULL,
+    target_id_1 UUID NOT NULL,
+    target_id_2 UUID NOT NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_migration_relation_source
+        UNIQUE (source_table, source_id_1, source_id_2),
+
+    CONSTRAINT uq_migration_relation_target
+        UNIQUE (target_table, target_id_1, target_id_2)
+);

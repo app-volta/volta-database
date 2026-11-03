@@ -1,242 +1,233 @@
+// ============================================================
+// VOLTA - DBML Schema (Sincronizado com schema.sql)
+// ============================================================
+
 Table role [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	type varchar(50) [ not null, unique ]
-}
-
-Table esg_metric [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	company_id uuid [ not null ]
-	period varchar(20) [ not null ]
-	total_waste_kg decimal [ not null ]
-	total_recycled_kg decimal [ not null ]
-	recycling_percentage decimal [ not null ]
-	calculated_at timestamp [ not null ]
-}
-
-Table notification [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	user_id uuid [ not null ]
-	type varchar(50) [ not null ]
-	title varchar(150) [ not null ]
-	message text [ not null ]
-	read boolean [ not null ]
-	created_at timestamp [ not null ]
-}
-
-Table message_attachment [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	message_id uuid [ not null ]
-	file_url varchar(500) [ not null ]
-	file_type varchar(100) [ not null ]
-}
-
-Table message [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	conversation_id uuid [ not null ]
-	user_id uuid [ not null ]
-	text text [ not null ]
-	reported boolean [ not null ]
-	sent_at timestamp [ not null ]
-}
-
-Table conversation [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	company_id uuid [ not null ]
-	cooperative_id uuid [ not null ]
-	collection_id uuid [ not null ]
-	created_at timestamp [ not null ]
-}
-
-Table review [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	cooperative_id uuid [ not null ]
-	user_id uuid [ not null ]
-	collection_id uuid [ not null ]
-	stars integer [ not null ]
-	comment text
-	reviewed_at timestamp [ not null ]
-}
-
-Table collection_status [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	collection_id uuid [ not null ]
-	status varchar(50) [ not null ]
-	changed_at timestamp [ not null ]
-	observation text
-}
-
-Table collection [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	incident_id uuid [ not null ]
-	cooperative_id uuid [ not null ]
-	requested_at timestamp [ not null ]
-	scheduled_at timestamp
-	current_status varchar(50) [ not null ]
-	collection_type varchar(50) [ not null ]
-	urgent boolean [ not null ]
-}
-
-Table cooperative [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	name varchar(150) [ not null ]
-	cnpj varchar(14) [ not null, unique ]
-	latitude decimal [ not null ]
-	longitude decimal [ not null ]
-	average_rating decimal
-	specialties varchar(500)
-}
-
-Table attachment [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	incident_id uuid [ not null ]
-	file_url varchar(500) [ not null ]
-	file_type varchar(100) [ not null ]
-}
-
-Table ai_report [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	incident_id uuid [ not null ]
-	detected_waste_type varchar(100)
-	ai_contamination_level varchar(50)
-	recommendations text
-	report_text text
-	generated_at timestamp [ not null ]
-}
-
-Table incident [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	company_id uuid [ not null ]
-	user_id uuid [ not null ]
-	area_id uuid [ not null ]
-	waste_type_id uuid
-	photo_url varchar(500)
-	employee_description text [ not null ]
-	contamination_level varchar(50)
-	estimated_quantity decimal
-	priority varchar(30) [ not null ]
-	status varchar(50) [ not null ]
-	registered_at timestamp [ not null ]
-}
-
-Table waste_type [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	category varchar(100) [ not null ]
-	description varchar(255)
-	default_risk_level varchar(50) [ not null ]
-}
-
-Table area [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	company_id uuid [ not null ]
-	sector_name varchar(100) [ not null ]
-	location_description varchar(255)
-}
-
-Table users [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	company_id uuid [ not null ]
-	role_id uuid [ not null ]
-	name varchar(150) [ not null ]
-	email varchar(150) [ not null, unique ]
-	password_hash varchar(255) [ not null ]
-	position varchar(100)
+    id uuid [ pk, not null ]
+    type varchar(50) [ not null, unique ]
 }
 
 Table company [headercolor: #175e7a] {
-	id uuid [ pk, not null ]
-	name varchar(150) [ not null ]
-	cnpj varchar(14) [ not null, unique ]
-	address varchar(255) [ not null ]
+    id uuid [ pk, not null ]
+    name varchar(150) [ not null ]
+    cnpj varchar(18) [ not null, unique ]
+    address varchar(255) [ not null ]
+    latitude double_precision
+    longitude double_precision
+    is_available boolean [ not null, default: true ]
 }
 
-Ref fk_company_id_users {
-	company.id < users.company_id [ delete: no action, update: no action ]
+Table cooperative [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    name varchar(150) [ not null ]
+    cnpj varchar(18) [ not null, unique ]
+    email varchar(150) [ not null ]
+    latitude decimal(9,6)
+    longitude decimal(9,6)
+    average_rating decimal(3,2) [ default: 0 ]
+    specialties varchar(500)
+    created_at timestamp_with_time_zone
 }
 
-Ref fk_company_id_area {
-	company.id < area.company_id [ delete: no action, update: no action ]
+Table users [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    company_id uuid
+    cooperative_id uuid
+    role_id uuid [ not null ]
+    name varchar(150) [ not null ]
+    email varchar(150) [ not null, unique ]
+    password_hash varchar(255) [ not null ]
+    position varchar(100)
+    photo_url varchar(2048)
+    registered_at date
+    first_login boolean
 }
 
-Ref fk_company_id_incident {
-	company.id < incident.company_id [ delete: no action, update: no action ]
+Table area [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    company_id uuid [ not null ]
+    sector_name varchar(100) [ not null ]
+    location_description varchar(255)
 }
 
-Ref fk_users_id_incident {
-	users.id < incident.user_id [ delete: no action, update: no action ]
+Table waste_type [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    category varchar(100) [ not null ]
+    description varchar(255)
+    default_risk_level varchar(50) [ not null ]
 }
 
-Ref fk_area_id_incident {
-	area.id < incident.area_id [ delete: no action, update: no action ]
+Table incident [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    company_id uuid [ not null ]
+    user_id uuid [ not null ]
+    area_id uuid [ not null ]
+    photo_url varchar(500)
+    employee_description text [ not null ]
+    contamination_level varchar(50)
+    estimated_quantity decimal(12,2)
+    priority varchar(30) [ not null ]
+    status varchar(50) [ not null ]
+    registered_at timestamp [ not null ]
+    ai_description text
+    title varchar(100)
+    change_reason varchar(200)
+    reviewed_by uuid
+    reviewed_at timestamp
 }
 
-Ref fk_waste_type_id_incident {
-	waste_type.id < incident.waste_type_id [ delete: no action, update: no action ]
+Table ai_report [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    incident_id uuid [ not null ]
+    detected_waste_type varchar(100)
+    ai_contamination_level varchar(50)
+    recommendations text
+    report_text text
+    generated_at timestamp [ not null ]
 }
 
-Ref fk_incident_id_ai_report {
-	incident.id - ai_report.incident_id [ delete: no action, update: no action ]
+Table attachment [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    incident_id uuid [ not null ]
+    file_url varchar(500) [ not null ]
+    file_type varchar(100) [ not null ]
 }
 
-Ref fk_incident_id_attachment {
-	incident.id < attachment.incident_id [ delete: no action, update: no action ]
+Table collection [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    incident_id uuid [ not null ]
+    cooperative_id uuid [ not null ]
+    requested_at timestamp [ not null ]
+    scheduled_at timestamp
+    current_status varchar(50) [ not null ]
+    collection_type varchar(50) [ not null ]
+    urgent boolean [ not null, default: false ]
 }
 
-Ref fk_incident_id_collection {
-	incident.id < collection.incident_id [ delete: no action, update: no action ]
+Table collection_status [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    collection_id uuid [ not null ]
+    status varchar(50) [ not null ]
+    changed_at timestamp [ not null ]
+    observation text
 }
 
-Ref fk_cooperative_id_collection {
-	cooperative.id < collection.cooperative_id [ delete: no action, update: no action ]
+Table review [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    cooperative_id uuid [ not null ]
+    user_id uuid [ not null ]
+    collection_id uuid [ not null ]
+    stars integer [ not null ]
+    comment text
+    reviewed_at timestamp [ not null ]
 }
 
-Ref fk_collection_id_collection_status {
-	collection.id < collection_status.collection_id [ delete: no action, update: no action ]
+Table conversation [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    company_id uuid [ not null ]
+    cooperative_id uuid [ not null ]
+    collection_id uuid [ not null ]
+    created_at timestamp [ not null ]
 }
 
-Ref fk_cooperative_id_review {
-	cooperative.id < review.cooperative_id [ delete: no action, update: no action ]
+Table message [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    conversation_id uuid [ not null ]
+    user_id uuid [ not null ]
+    text text [ not null ]
+    reported boolean [ not null, default: false ]
+    sent_at timestamp [ not null ]
 }
 
-Ref fk_users_id_review {
-	users.id < review.user_id [ delete: no action, update: no action ]
+Table message_attachment [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    message_id uuid [ not null ]
+    file_url varchar(500) [ not null ]
+    file_type varchar(100) [ not null ]
 }
 
-Ref fk_collection_id_review {
-	collection.id < review.collection_id [ delete: no action, update: no action ]
+Table notification [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    user_id uuid [ not null ]
+    type varchar(50) [ not null ]
+    title varchar(150) [ not null ]
+    message text [ not null ]
+    read boolean [ not null, default: false ]
+    created_at timestamp [ not null ]
 }
 
-Ref fk_company_id_conversation {
-	company.id < conversation.company_id [ delete: no action, update: no action ]
+Table esg_metric [headercolor: #175e7a] {
+    id uuid [ pk, not null ]
+    company_id uuid [ not null ]
+    period varchar(20) [ not null ]
+    total_waste_kg decimal(14,2) [ not null, default: 0 ]
+    total_recycled_kg decimal(14,2) [ not null, default: 0 ]
+    recycling_percentage decimal(5,2) [ not null, default: 0 ]
+    calculated_at timestamp [ not null ]
+    weekly_target numeric(12,2)
+    weekly_date date
+    monthly_target numeric(12,2)
+    monthly_date date
+    quarterly_target numeric(12,2)
+    quarterly_date date
 }
 
-Ref fk_cooperative_id_conversation {
-	cooperative.id < conversation.cooperative_id [ delete: no action, update: no action ]
+Table cooperative_waste_type [headercolor: #175e7a] {
+    cooperative_id uuid [ not null ]
+    waste_type_id uuid [ not null ]
+
+    Indexes {
+        (cooperative_id, waste_type_id) [ pk ]
+    }
 }
 
-Ref fk_collection_id_conversation {
-	collection.id < conversation.collection_id [ delete: no action, update: no action ]
+Table incident_waste_type [headercolor: #175e7a] {
+    incident_id uuid [ not null ]
+    waste_type_id uuid [ not null ]
+
+    Indexes {
+        (incident_id, waste_type_id) [ pk ]
+    }
 }
 
-Ref fk_conversation_id_message {
-	conversation.id < message.conversation_id [ delete: no action, update: no action ]
-}
+// ------------------------------------------------------------
+// Relacionamentos (Foreign Keys)
+// ------------------------------------------------------------
 
-Ref fk_users_id_message {
-	users.id < message.user_id [ delete: no action, update: no action ]
-}
+Ref fk_users_company: company.id < users.company_id
+Ref fk_users_cooperative: cooperative.id < users.cooperative_id
+Ref fk_users_role: role.id < users.role_id
 
-Ref fk_message_id_message_attachment {
-	message.id < message_attachment.message_id [ delete: no action, update: no action ]
-}
+Ref fk_area_company: company.id < area.company_id
 
-Ref fk_users_id_notification {
-	users.id < notification.user_id [ delete: no action, update: no action ]
-}
+Ref fk_incident_company: company.id < incident.company_id
+Ref fk_incident_user: users.id < incident.user_id
+Ref fk_incident_area: area.id < incident.area_id
+Ref fk_incident_reviewed_by: users.id < incident.reviewed_by
 
-Ref fk_company_id_esg_metric {
-	company.id < esg_metric.company_id [ delete: no action, update: no action ]
-}
+Ref fk_ai_report_incident: incident.id - ai_report.incident_id
+Ref fk_attachment_incident: incident.id < attachment.incident_id
 
-Ref fk_role_id_users {
-	role.id < users.role_id [ delete: no action, update: no action ]
-}
+Ref fk_collection_incident: incident.id < collection.incident_id
+Ref fk_collection_cooperative: cooperative.id < collection.cooperative_id
+Ref fk_collection_status_collection: collection.id < collection_status.collection_id
+
+Ref fk_review_cooperative: cooperative.id < review.cooperative_id
+Ref fk_review_user: users.id < review.user_id
+Ref fk_review_collection: collection.id < review.collection_id
+
+Ref fk_conversation_company: company.id < conversation.company_id
+Ref fk_conversation_cooperative: cooperative.id < conversation.cooperative_id
+Ref fk_conversation_collection: collection.id < conversation.collection_id
+Ref fk_message_conversation: conversation.id < message.conversation_id
+Ref fk_message_user: users.id < message.user_id
+Ref fk_message_attachment_message: message.id < message_attachment.message_id
+
+Ref fk_notification_user: users.id < notification.user_id
+Ref fk_esg_metric_company: company.id < esg_metric.company_id
+
+Ref fk_cwt_cooperative: cooperative.id < cooperative_waste_type.cooperative_id
+Ref fk_cwt_waste_type: waste_type.id < cooperative_waste_type.waste_type_id
+
+Ref fk_iwt_incident: incident.id < incident_waste_type.incident_id [ delete: cascade ]
+Ref fk_iwt_waste_type: waste_type.id < incident_waste_type.waste_type_id

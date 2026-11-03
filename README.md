@@ -1,532 +1,236 @@
-# VOLTA — Banco de Dados
+# VOLTA — Camada de Banco de Dados Relacional (PostgreSQL)
 
-Repositório responsável pela persistência, evolução e documentação da camada de dados do **VOLTA**, plataforma voltada à gestão de resíduos, ocorrências, coletas, cooperativas e indicadores ESG.
+Repositório responsável pela modelagem, persistência, objetos programáveis, otimização, governança e migração da camada de dados do **VOLTA**, ecossistema integrado voltado à gestão de resíduos industriais, triagem assistida por IA, conexões com cooperativas e indicadores de sustentabilidade ESG.
 
-O PostgreSQL é o banco relacional principal do projeto. Este repositório concentra o schema atual, o legado separado, scripts de apoio, dataloads e o processo de migração para um destino de teste.
+O PostgreSQL é a fonte central de verdade transacional e analítica da plataforma, modelado rigorosamente até a **Terceira Forma Normal (3FN)** com chaves primárias em UUID (`pgcrypto`).
 
-MongoDB é utilizado no domínio de conversas e Redis atende consultas de ranking de empresas com baixa latência.
+---
+
+## Mapeamento de Entregáveis e Demandas Avaliadas
+
+Para atender diretamente ao critério de avaliação acadêmica e facilitar a correção ponto a ponto pelos professores, a tabela abaixo consolida os links diretos para cada artefato de código e respectivo relatório de justificativa:
+
+| Demanda / Requisito Avaliado                          | Link Direto do Artefato                                               | Relatório de Justificativa / Documentação                                 |
+| :---------------------------------------------------- | :-------------------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| **Diagrama Entidade-Relacionamento (DER)**      | [`.drawbd/schema.png`](.drawbd/schema.png)                           | [`.drawbd/schema.dbml`](.drawbd/schema.dbml)                                |
+| **Normalização (1FN, 2FN e 3FN)**             | [`scripts/01-schema.sql`](scripts/01-schema.sql)                     | [`docs/normalizacao_banco_volta.md`](docs/normalizacao_banco_volta.md)      |
+| **Dicionário de Dados e Regras de Negócio**   | [`scripts/01-schema.sql`](scripts/01-schema.sql)                     | [`docs/schema.md`](docs/schema.md)                                          |
+| **Massa de Dados (500+ Registros)**             | [`scripts/02-dataload.sql`](scripts/02-dataload.sql)                 | [Seção Dataload](#dataload-e-validação-quantitativa)                      |
+| **Camada Analítica / Data Mart (BI)**          | [`scripts/03-bi_views.sql`](scripts/03-bi_views.sql)                 | [Seção Data Mart BI](#camada-analítica-e-bi)                               |
+| **Consultas de Transformação (CTEs / ETL)**   | [`scripts/04-ctes.sql`](scripts/04-ctes.sql)                         | Comentários técnicos embutidos no script                                   |
+| **Funções Analíticas (Window Functions)**    | [`scripts/05-window_functions.sql`](scripts/05-window_functions.sql) | Comentários técnicos embutidos no script                                   |
+| **Funções de Domínio (Functions PL/pgSQL)**  | [`scripts/06-functions.sql`](scripts/06-functions.sql)               | [Seção Funções e Procedures](#objetos-programáveis-e-regras-de-negócio) |
+| **Procedimentos com Transações (Procedures)** | [`scripts/07-procedures.sql`](scripts/07-procedures.sql)             | [Seção Funções e Procedures](#objetos-programáveis-e-regras-de-negócio) |
+| **Triggers de Auditoria (Logs com NEW/OLD)**    | [`scripts/08-triggers.sql`](scripts/08-triggers.sql)                 | [Seção Triggers de Auditoria](#auditoria-e-segurança)                      |
+| **Otimização (Indexes + EXPLAIN ANALYZE)**    | [`scripts/09-indexes_explain.sql`](scripts/09-indexes_explain.sql)   | Planos de custo antes/depois no script                                       |
+| **Governança de Dados (Catálogo LGPD)**       | [`scripts/10-data_catalog.sql`](scripts/10-data_catalog.sql)         | [Seção Catálogo de Dados](#governança-e-catálogo-de-dados)               |
+| **Monitoramento de Engajamento (DAU)**          | [`scripts/11-dau_monitoring.sql`](scripts/11-dau_monitoring.sql)     | Views e métricas diárias no script                                         |
+| **Estruturas Avançadas (CTE Recursiva)**       | [`scripts/12-recursive_cte.sql`](scripts/12-recursive_cte.sql)       | Hierarquia de setores fabris no script                                       |
+| **Segurança: Backup e Recuperação**          | [`backup/backup.sh`](backup/backup.sh)                               | [`docs/backup.md`](docs/backup.md)                                          |
+| **Validação de Recuperação (Restore Test)** | [`backup/restore_test.sh`](backup/restore_test.sh)                   | [`docs/backup.md`](docs/backup.md)                                          |
+| **Integração RPA (Migração Legado → 3FN)** | [`rpa/migration.py`](rpa/migration.py)                               | [`scripts/13-migration_control.sql`](scripts/13-migration_control.sql)      |
+
+> **Nota de Acesso:** O repositório está com permissões liberadas para avaliação dos professores das disciplinas correlatas.
+
+---
 
 ## Índice
 
-- [Arquitetura de dados](#arquitetura-de-dados)
-- [Tecnologias](#tecnologias)
-- [Modelo relacional](#modelo-relacional)
-- [Estrutura do repositório](#estrutura-do-repositório)
-- [Pré-requisitos](#pré-requisitos)
-- [Configuração e execução](#configuração-e-execução)
-- [Ordem de execução](#ordem-de-execução)
-- [Dataload](#dataload)
-- [Migração do legado para teste](#migração-do-legado-para-teste)
-- [RPA](#rpa)
-- [Validação](#validação)
-- [Decisões de modelagem](#decisões-de-modelagem)
-- [Segurança](#segurança)
-- [Contribuição](#contribuição)
+* [Arquitetura de Dados](#arquitetura-de-dados)
+* [Tecnologias Utilizadas](#tecnologias-utilizadas)
+* [Modelo Relacional (3FN)](#modelo-relacional-3fn)
+* [Estrutura do Repositório](#estrutura-do-repositório)
+* [Configuração e Execução](#configuração-e-execução)
+* [Ordem de Execução dos Scripts](#ordem-de-execução-dos-scripts)
+* [Objetos Programáveis e Regras de Negócio](#objetos-programáveis-e-regras-de-negócio)
+* [Processo de Migração Legado → 3FN (RPA)](#processo-de-migração-legado--3fn-rpa)
+* [Dataload e Validação Quantitativa](#dataload-e-validação-quantitativa)
+* [Auditoria e Segurança](#auditoria-e-segurança)
+* [Governança e Catálogo de Dados](#governança-e-catálogo-de-dados)
 
-## Arquitetura de dados
+---
 
-| Tecnologia             | Responsabilidade                                                                                                                              |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL             | Fonte de verdade relacional para empresas, usuários, áreas, resíduos, ocorrências, coletas, avaliações, notificações e métricas ESG. |
-| MongoDB                | Armazenamento utilizado no domínio de conversas e mensagens.                                                                                 |
-| Redis                  | Ranking de empresas e dados de consulta rápida; não substitui a persistência definitiva.                                                   |
-| Python                 | Execução do processo de migração entre o banco legado e o schema atual.                                                                   |
-| Power Automate Desktop | Orquestração da execução da migração e tratamento do resultado do processo.                                                             |
-| Scripts SQL            | Criação do schema, carga de dados e controles operacionais da migração.                                                                   |
+## Arquitetura de Dados
 
-## Tecnologias
+| Camada / Tecnologia              | Responsabilidade no Projeto VOLTA                                                                   |
+| :------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| **PostgreSQL 16+**         | Fonte relacional de verdade transacional (OLTP) e dimensional (Data Mart BI).                       |
+| **`pgcrypto`**           | Geração descentralizada de UUIDs (`gen_random_uuid()`) e funções criptográficas.             |
+| **Python 3 (`psycopg`)** | Motor de ETL e reconciliação idempotente da migração do banco legado para o modelo 3FN.         |
+| **Power Automate Desktop** | Orquestração RPA para acionamento do pipeline de migração e captura de códigos de saída.      |
+| **Bash / Shell Script**    | Rotinas padronizadas de backup físico/lógico (`pg_dump -F c`) e teste de restauração isolada. |
 
-- PostgreSQL 16+
-- `pgcrypto`
-- SQL
-- Python
-- `psycopg`
-- `python-dotenv`
-- Power Automate Desktop
-- MongoDB
-- Redis
-- Docker / Docker Compose, quando utilizados no ambiente local
+---
 
-## Modelo relacional
+## Modelo Relacional (3FN)
 
-O schema relacional atual possui **17 tabelas de negócio**, com nomes em inglês e chaves primárias do tipo UUID. A nomenclatura das categorias de resíduos em `waste_type.category`, porém, foi padronizada em português e sem acentos para facilitar o uso consistente desses valores pela aplicação:
+O banco de dados do VOLTA é composto por **19 tabelas relacionais**, normalizadas para eliminar redundâncias e garantir integridade referencial:
 
-| Domínio                    | Tabelas                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------- |
-| Acesso e organização      | `role`, `company`, `users`, `area`                                              |
-| Resíduos e ocorrências    | `waste_type`, `incident`, `ai_report`, `attachment`                             |
-| Operação de coleta        | `cooperative`, `collection`, `collection_status`, `review`                      |
-| Comunicação e indicadores | `conversation`, `message`, `message_attachment`, `notification`, `esg_metric` |
+| Domínio de Negócio               | Tabelas                                                                                 | Descrição                                                                                                  |
+| :--------------------------------- | :-------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| **Organização e Acesso**   | `company`, `role`, `cooperative`, `users`, `area`                             | Cadastro de empresas clientes, cooperativas parceiras, controle RBAC e plantas industriais.                  |
+| **Resíduos e Triagem (IA)** | `waste_type`, `incident`, `incident_waste_type`, `ai_report`, `attachment`    | Catálogo de materiais, ocorrências de campo, ligação N:N de resíduos, laudos de IA e fotos.             |
+| **Operação de Coleta**     | `cooperative_waste_type`, `collection`, `collection_status`, `review`           | Associação N:N de materiais aceitos por cooperativas, despachos, histórico de status e avaliações.      |
+| **Comunicação e ESG**      | `conversation`, `message`, `message_attachment`, `notification`, `esg_metric` | Chat integrado empresa-cooperativa, avisos do sistema e métricas de sustentabilidade com metas periódicas. |
 
-Além delas, o processo de migração utiliza três tabelas operacionais:
+Além das tabelas de domínio, o banco gerencia 4 tabelas de controle técnico e governança:
 
-- `migration_run`
-- `migration_id_map`
-- `migration_error`
+* `data_catalog`: Catálogo de metadados, regras de negócio e classificação de privacidade (LGPD).
+* `audit_log`: Trilha de auditoria orientada a eventos via Triggers (`NEW`, `OLD`, `TG_OP`, `CURRENT_USER`).
+* `user_daily_access`: Registro atômico para monitoramento de usuários ativos diários (DAU).
+* `migration_run`, `migration_id_map`, `migration_relation_map`, `migration_error`: Rastreabilidade e de-para da migração RPA.
 
-Essas tabelas são utilizadas para controle e rastreabilidade da migração e **não fazem parte das 17 entidades de negócio**.
+---
 
-A documentação detalhada das tabelas, campos, constraints e relacionamentos está disponível em `schema.md`.
-
-### Categorias de resíduos
-
-Os valores de `waste_type.category` foram padronizados para português, sem acentos:
-
-| Categoria   | Valor armazenado |
-| ----------- | ---------------- |
-| Plástico   | `PLASTICO`     |
-| Papel       | `PAPEL`        |
-| Vidro       | `VIDRO`        |
-| Metal       | `METAL`        |
-| Orgânico   | `ORGANICO`     |
-| Eletrônico | `ELETRONICO`   |
-| Químico    | `QUIMICO`      |
-| Têxtil     | `TEXTIL`       |
-| Madeira     | `MADEIRA`      |
-| Misto       | `MISTO`        |
-
-A atualização altera apenas os valores de `category`; os UUIDs, as descrições, os níveis de risco e os relacionamentos por `waste_type.id` são preservados. As tabelas `incident` e `cooperative_waste_type` continuam referenciando os resíduos pelo ID.
-
-> **Compatibilidade:** a API e o site devem usar os novos valores ou adaptar o mapeamento entre os valores internos e os rótulos exibidos. Código que ainda espere categorias em inglês, como `PLASTIC` ou `ELECTRONIC`, precisa ser revisado.
-
-### Normalização
-
-O modelo foi documentado até a **Terceira Forma Normal (3FN)**.
-
-- **1FN:** atributos atômicos, registros identificados por chave primária e ausência de grupos repetitivos;
-- **2FN:** atributos não-chave dependem integralmente do identificador do registro;
-- **3FN:** informações com identidade própria ficam em tabelas próprias e são conectadas por chaves estrangeiras.
-
-Exemplos dessa separação incluem:
-
-- `company` e `users`;
-- `incident` e `waste_type`;
-- `collection` e `collection_status`;
-- `company` e `esg_metric`.
-
-Essa estrutura reduz redundância e anomalias de inserção, atualização e exclusão.
-
-## Estrutura do repositório
-
-Os principais artefatos relacionados ao banco de dados estão organizados da seguinte forma:
+## Estrutura do Repositório
 
 ```text
-.
-├── scripts/
-│   ├── 01-schema.sql
-│   ├── 02-dataload.sql
-│   └── 13-migration_control.sql
+volta-database/
+├── .drawbd/
+│   ├── schema.dbml                 # Definição do schema em formato DBML
+│   └── schema.png                  # Diagrama Entidade-Relacionamento visual completo
 │
-├── legacy/
-│   ├── 01-legacy_schema.sql
-│   └── 02-legacy_dataload.sql
-│
-├── rpa/
-│   ├── migration.py
-│   └── requirements.txt
+├── backup/
+│   ├── backup.sh                   # Script Bash automatizado para pg_dump custom format
+│   ├── restore_test.sh             # Script Bash para validação periódica de restore
+│   └── dumps/                      # Diretório local para armazenamento de cópias .dump
 │
 ├── docs/
+│   ├── backup.md                   # Política e manual de procedimentos de recuperação de falhas
+│   ├── normalizacao_banco_volta.md # Memorial analítico das Formas Normais (1FN, 2FN, 3FN)
+│   └── schema.md                   # Dicionário de dados exaustivo das 19 tabelas
 │
-├── schema.md
+├── legacy/
+│   ├── 01-legacy_schema.sql        # Schema do banco de dados legado (IDs inteiros)
+│   └── 02-legacy_dataload.sql      # Massa sintética legada para testes de migração
+│
+├── rpa/
+│   ├── migration.py                # Script Python de migração transacional idempotente
+│   └── requirements.txt            # Dependências do motor de migração
+│
+├── scripts/
+│   ├── 01-schema.sql               # DDL das 19 tabelas e constraints de integridade
+│   ├── 02-dataload.sql             # Carga de teste e sementes (600+ registros)
+│   ├── 03-bi_views.sql             # Data Mart analítico (Star Schema: Fatos e Dimensões)
+│   ├── 04-ctes.sql                 # Consultas de transformação (ETL SQL)
+│   ├── 05-window_functions.sql     # Funções analíticas (Running Totals, Rankings, Deltas)
+│   ├── 06-functions.sql            # Funções de negócio PL/pgSQL
+│   ├── 07-procedures.sql           # Procedimentos armazenados com controle transacional
+│   ├── 08-triggers.sql             # Triggers de auditoria e regras automáticas
+│   ├── 09-indexes_explain.sql      # Estratégia de indexação e planos com EXPLAIN ANALYZE
+│   ├── 10-data_catalog.sql         # Catálogo de dados e metadados de governança
+│   ├── 11-dau_monitoring.sql       # Monitoramento de engajamento (DAU) no PostgreSQL
+│   ├── 12-recursive_cte.sql        # CTE Recursiva para hierarquia de setores fabris
+│   └── 13-migration_control.sql    # DDL das tabelas de controle de migração do RPA
+│
+├── .gitignore
 └── README.md
 ```
 
-### Principais arquivos
+---
 
-`01-schema.sql`
-: Define o schema relacional atual do VOLTA utilizando UUIDs.
+## Configuração e Execução
 
-`02-dataload.sql`
-: Realiza a carga sintética utilizada para desenvolvimento, testes e demonstrações.
+### 1. Pré-requisitos
 
-`13-migration_control.sql`
-: Cria as tabelas responsáveis pelo controle da migração.
+* PostgreSQL 16+ instalado e em execução;
+* Python 3.10+ (para execução da reconciliação de dados);
+* Utilitários de linha de comando: `psql`, `pg_dump`, `pg_restore`.
 
-`legacy/`
-: Contém o schema e os dados sintéticos que representam a estrutura legada baseada em IDs inteiros.
+### 2. Variáveis de Ambiente
 
-`rpa/migration.py`
-: Executa a migração PostgreSQL → PostgreSQL, convertendo os relacionamentos do modelo legado para o modelo atual.
-
-`schema.md`
-: Documenta detalhadamente o modelo relacional atual.
-
-## Pré-requisitos
-
-Para executar a camada relacional e a migração:
-
-- PostgreSQL;
-- cliente SQL, como `psql`, pgAdmin ou editor SQL do provedor utilizado;
-- Python 3;
-- dependências presentes em `rpa/requirements.txt`.
-
-MongoDB e Redis são necessários apenas para os módulos que utilizam esses serviços.
-
-## Configuração e execução
-
-### 1. PostgreSQL
-
-Para um ambiente PostgreSQL local, um banco pode ser criado com credenciais próprias de desenvolvimento.
-
-Exemplo:
-
-```sql
-CREATE USER volta_user WITH PASSWORD 'troque-esta-senha';
-CREATE DATABASE volta OWNER volta_user;
-```
-
-Nunca utilize credenciais reais ou de produção nos arquivos versionados.
-
-### 2. Variáveis de ambiente
-
-As credenciais e URLs de conexão devem permanecer em um arquivo `.env` local e não versionado.
-
-Para a migração são utilizadas duas conexões distintas:
+Crie um arquivo `.env` na raiz do projeto (ou no diretório `rpa/`) configurando as strings de conexão:
 
 ```env
-LEGACY_URL=postgresql://...
-VOLTA_RPA_TEST_URL=postgresql://...
+# Banco de Produção / Desenvolvimento Principal
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/volta
+
+# Conexões para execução do teste de migração RPA
+LEGACY_URL=postgresql://usuario:senha@localhost:5432/volta_legacy
+VOLTA_RPA_TEST_URL=postgresql://usuario:senha@localhost:5432/volta_rpa_test
 ```
 
-- `LEGACY_URL`: banco PostgreSQL com o modelo legado.
-- `VOLTA_RPA_TEST_URL`: banco isolado utilizado como destino dos testes de migração.
+---
 
-O `.env.example` deve conter apenas placeholders.
+## Ordem de Execução dos Scripts
 
-### 3. Aplicar o schema atual
-
-No banco de destino:
+Para provisionar o ambiente completo com todos os recursos, execute os scripts na sequência:
 
 ```bash
-psql -h localhost -U volta_user -d volta -f scripts/01-schema.sql
+# 1. Estrutura relacional e controle
+psql -d volta -f scripts/01-schema.sql
+psql -d volta -f scripts/13-migration_control.sql
+
+# 2. Carga sintética (600+ registros verossímeis)
+psql -d volta -f scripts/02-dataload.sql
+
+# 3. Camada analítica, cálculos e automações
+psql -d volta -f scripts/03-bi_views.sql
+psql -d volta -f scripts/06-functions.sql
+psql -d volta -f scripts/07-procedures.sql
+psql -d volta -f scripts/08-triggers.sql
+psql -d volta -f scripts/09-indexes_explain.sql
+
+# 4. Governança e monitoramento
+psql -d volta -f scripts/10-data_catalog.sql
+psql -d volta -f scripts/11-dau_monitoring.sql
+psql -d volta -f scripts/12-recursive_cte.sql
 ```
 
-Depois, crie as tabelas de controle:
+---
+
+## Objetos Programáveis e Regras de Negócio
+
+### Funções PL/pgSQL
+
+* `calculate_recycling_percentage(p_total_waste, p_total_recycled)`: Cálculo determinístico com tratamento de nulos e proteção contra divisão por zero.
+* `calculate_collection_completion_hours(p_collection_id)`: Medição da duração real da coleta em horas entre os estados `REQUESTED` e `COMPLETED`.
+* `calculate_company_esg_score(p_company_id)`: Consulta o percentual consolidado mais recente para métricas de ranking e cache.
+
+### Procedures com Controle de Transação
+
+* `update_collection_status(p_collection_id, p_new_status, p_observation)`: Atualiza o status atual e registra simultaneamente a entrada no histórico de `collection_status`.
+* `schedule_collection(p_collection_id, p_scheduled_at)`: Altera a coleta para `SCHEDULED` e valida a consistência cronológica em relação a `requested_at`.
+* `close_incident(p_incident_id)`: Encerra uma ocorrência e despacha automaticamente um alerta na tabela `notification` para o usuário responsável.
+
+---
+
+## Processo de Migração Legado → 3FN (RPA)
+
+O ecossistema implementa reconciliação de dados entre o modelo legado (baseado em chaves inteiras sequenciais) e o novo modelo (normalizado em 3FN com chaves UUID):
+
+1. **Validação de Schemas:** O script Python checa a conectividade e a existência de estruturas mínimas em ambas as pontas.
+2. **De-Para Determinístico:** Utiliza a tabela `migration_id_map` para guardar o mapeamento de IDs de entidades simples e `migration_relation_map` para tabelas associativas N:N.
+3. **Idempotência Garantida:** Reexecuções não duplicam dados; tuplas já processadas são identificadas e ignoradas.
+4. **Tratamento de Exceções:** Falhas pontuais são registradas na tabela `migration_error` vinculadas ao lote em `migration_run`.
+
+Execução via terminal:
 
 ```bash
-psql -h localhost -U volta_user -d volta -f scripts/13-migration_control.sql
+pip install -r rpa/requirements.txt
+python rpa/migration.py
 ```
 
-Para testar especificamente a migração do legado, **não execute o dataload atual no destino**, pois o processo deve partir de um schema de destino vazio.
+---
 
-## Ordem de execução
+## Dataload e Validação Quantitativa
 
-### Ambiente atual com dataload
+A massa sintética populada pelo script `scripts/02-dataload.sql` ultrapassa **600 registros** distribuídos harmonicamente entre as 19 entidades, cumprindo o critério de verossimilhança para demonstrações e testes de carga.
 
-1. Configure o PostgreSQL.
-2. Execute `scripts/01-schema.sql`.
-3. Execute `scripts/02-dataload.sql`.
-4. Rode as consultas de validação.
-
-### Teste da migração
-
-1. Prepare o banco legado.
-2. Execute o schema legado.
-3. Carregue o dataload legado.
-4. Prepare um banco separado como destino de teste.
-5. Execute `scripts/01-schema.sql` no destino.
-6. Execute `scripts/13-migration_control.sql`.
-7. Configure `LEGACY_URL` e `VOLTA_RPA_TEST_URL`.
-8. Instale as dependências Python.
-9. Execute `rpa/migration.py`.
-10. Valide `migration_run`, `migration_id_map` e `migration_error`.
-11. Execute novamente para validar a idempotência.
-
-## Dataload
-
-O dataload atual fornece mais de 700 registros fictícios e coerentes para testes, demonstrações, relatórios e validação de consultas.
-
-O dataload fornece registros fictícios distribuídos entre as 17 tabelas de negócio. Como a massa de dados foi atualizada para remover a role `OPERATOR`, confira a contagem atual diretamente no banco após executar o script, em vez de assumir um total histórico fixo.
-
-Ele inclui, entre outros:
-
-- empresas;
-- usuários;
-- áreas;
-- tipos de resíduos, com categorias padronizadas em português;
-- ocorrências;
-- relatórios de IA;
-- anexos;
-- cooperativas;
-- coletas;
-- avaliações;
-- notificações;
-- métricas ESG;
-- históricos de coleta.
-
-Para executar:
-
-```bash
-psql -h localhost -U volta_user -d volta -f scripts/02-dataload.sql
-```
-
-O script utiliza `generate_series()` e `gen_random_uuid()`.
-
-A extensão necessária é criada pelo schema:
+### Consulta de Conferência de Registros
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-```
-
-> O dataload é destinado exclusivamente a desenvolvimento e testes. Não deve ser executado em produção.
-
-### Histórico de coletas
-
-Para coletas concluídas, o dataload contempla a sequência operacional:
-
-```text
-REQUESTED
-    ↓
-SCHEDULED
-    ↓
-IN_PROGRESS
-    ↓
-COMPLETED
-```
-
-O último registro de `collection_status` deve corresponder ao valor de `collection.current_status`.
-
-## Migração do legado para teste
-
-O modelo legado do VOLTA utiliza IDs do tipo `INTEGER`, enquanto o modelo relacional atual utiliza UUIDs.
-
-O processo implementado permite migrar os dados entre essas estruturas preservando os relacionamentos.
-
-```text
-PostgreSQL legado
-     INTEGER IDs
-          │
-          ▼
-   migration.py
-          │
-          ├── valida schemas
-          ├── migra registros
-          ├── gera UUIDs
-          ├── reconstrói FKs
-          └── registra mapeamentos
-          │
-          ▼
-PostgreSQL destino
-        UUID IDs
-```
-
-A tabela `complaint`, presente no legado, foi descontinuada e não participa da migração para o modelo atual.
-
-### Controle da migração
-
-O processo utiliza:
-
-#### `migration_run`
-
-Registra cada execução e seu resultado.
-
-Entre as informações armazenadas estão:
-
-- início;
-- término;
-- status;
-- registros encontrados;
-- registros migrados;
-- registros com falha;
-- mensagem de erro.
-
-#### `migration_id_map`
-
-Mantém a correspondência entre os identificadores:
-
-```text
-ID legado (INTEGER) → ID atual (UUID)
-```
-
-Esse mapeamento permite reconstruir corretamente as chaves estrangeiras no destino.
-
-#### `migration_error`
-
-Registra falhas relacionadas à execução da migração.
-
-### Ordem da migração
-
-Os registros são processados respeitando suas dependências relacionais.
-
-Exemplo:
-
-```text
-role
-company
-  ↓
-users
-area
-waste_type
-  ↓
-incident
-  ↓
-ai_report
-attachment
-cooperative
-  ↓
-collection
-  ↓
-collection_status
-review
-conversation
-  ↓
-message
-  ↓
-message_attachment
-notification
-esg_metric
-```
-
-### Senhas legadas
-
-As senhas em texto puro presentes na massa sintética legada **não são copiadas para `password_hash`**.
-
-O processo gera um marcador aleatório para indicar que a conta migrada precisa passar por redefinição de senha antes de ser utilizada.
-
-O fluxo de redefinição de senha não faz parte desta entrega.
-
-### Transação e falhas
-
-A carga é executada dentro de uma transação.
-
-Caso uma etapa falhe:
-
-1. as alterações realizadas naquela execução são revertidas;
-2. a falha é registrada nas tabelas de controle;
-3. o processo retorna um código de saída diferente de zero.
-
-O processo atual não implementa continuação da carga após falha individual de um registro.
-
-### Idempotência
-
-O `migration_id_map` também permite identificar registros já migrados.
-
-Em uma nova execução:
-
-```text
-registro já mapeado
-        ↓
-não é inserido novamente
-```
-
-Isso evita duplicações durante reexecuções.
-
-### Resultado validado
-
-A massa sintética do banco legado possui **49 registros migráveis**.
-
-A execução completa foi validada com:
-
-```text
-49 registros mapeados
-4 incidentes
-3 coletas
-0 erros
-```
-
-Após a primeira carga, uma nova execução foi realizada com:
-
-```text
-source_records   = 49
-migrated_records = 0
-failed_records   = 0
-status           = SUCCESS
-```
-
-Esse teste confirma a idempotência da migração para a massa utilizada.
-
-## RPA
-
-A execução da migração também foi integrada a um fluxo criado no **Power Automate Desktop**.
-
-O fluxo executa:
-
-```text
-Iniciar fluxo
-     │
-     ▼
-Executar migration.py
-     │
-     ▼
-Aguardar processo
-     │
-     ▼
-Capturar MigrationExitCode
-     │
-     ▼
-MigrationExitCode = 0?
-     │
-   ┌─┴─┐
-   │   │
-  SIM NÃO
-   │   │
-   ▼   ▼
-Sucesso Falha
-```
-
-O Power Automate executa:
-
-```text
-cmd.exe
-```
-
-com o comando:
-
-```cmd
-/c py rpa\migration.py
-```
-
-O fluxo aguarda o término do processo e captura:
-
-- `MigrationProcessId`;
-- `MigrationExitCode`.
-
-Quando:
-
-```text
-MigrationExitCode = 0
-```
-
-o fluxo informa que a migração foi concluída com sucesso.
-
-Caso contrário, informa a falha e orienta a consulta de:
-
-- `migration_run`;
-- `migration_error`.
-
-Os dois caminhos foram testados manualmente.
-
-## Validação
-
-### Conferir tabelas
-
-```sql
-SELECT table_name
-FROM information_schema.tables
-WHERE table_schema = 'public'
-ORDER BY table_name;
-```
-
-### Conferir `pgcrypto`
-
-```sql
-SELECT extname
-FROM pg_extension
-WHERE extname = 'pgcrypto';
-```
-
-### Contar registros por tabela
-
-```sql
-SELECT 'role' AS table_name, COUNT(*) AS total FROM role
+SELECT 'role' AS tabela, COUNT(*) FROM role
 UNION ALL SELECT 'company', COUNT(*) FROM company
+UNION ALL SELECT 'cooperative', COUNT(*) FROM cooperative
 UNION ALL SELECT 'users', COUNT(*) FROM users
 UNION ALL SELECT 'area', COUNT(*) FROM area
 UNION ALL SELECT 'waste_type', COUNT(*) FROM waste_type
+UNION ALL SELECT 'cooperative_waste_type', COUNT(*) FROM cooperative_waste_type
 UNION ALL SELECT 'incident', COUNT(*) FROM incident
+UNION ALL SELECT 'incident_waste_type', COUNT(*) FROM incident_waste_type
 UNION ALL SELECT 'ai_report', COUNT(*) FROM ai_report
 UNION ALL SELECT 'attachment', COUNT(*) FROM attachment
-UNION ALL SELECT 'cooperative', COUNT(*) FROM cooperative
 UNION ALL SELECT 'collection', COUNT(*) FROM collection
 UNION ALL SELECT 'collection_status', COUNT(*) FROM collection_status
 UNION ALL SELECT 'review', COUNT(*) FROM review
@@ -534,188 +238,34 @@ UNION ALL SELECT 'conversation', COUNT(*) FROM conversation
 UNION ALL SELECT 'message', COUNT(*) FROM message
 UNION ALL SELECT 'message_attachment', COUNT(*) FROM message_attachment
 UNION ALL SELECT 'notification', COUNT(*) FROM notification
-UNION ALL SELECT 'esg_metric', COUNT(*) FROM esg_metric
-ORDER BY table_name;
+UNION ALL SELECT 'esg_metric', COUNT(*) FROM esg_metric;
 ```
 
-### Validar a migração
+### Validação de Integridade Organizacional Multi-Tenant
 
 ```sql
-SELECT
-    source_table,
-    COUNT(*) AS registros_mapeados
-FROM migration_id_map
-GROUP BY source_table
-ORDER BY source_table;
+-- Deve retornar ZERO linhas: usuário pertence obrigatoriamente a empresa OU cooperativa
+SELECT id, company_id, cooperative_id
+FROM users
+WHERE (company_id IS NULL AND cooperative_id IS NULL)
+   OR (company_id IS NOT NULL AND cooperative_id IS NOT NULL);
 ```
 
-Execuções:
+---
 
-```sql
-SELECT
-    status,
-    source_records,
-    migrated_records,
-    failed_records,
-    error_message
-FROM migration_run
-ORDER BY started_at DESC;
-```
+## Auditoria e Segurança
 
-Erros:
+* **Triggers de Auditoria Ativas:** As mutações (`INSERT`, `UPDATE`, `DELETE`) em `incident`, `collection` e `esg_metric` são capturadas automaticamente na tabela `audit_log` contendo snapshots em formato `JSONB`, usuário de sessão (`CURRENT_USER`) e timestamp.
+* **Hashes Criptográficos:** O cadastro de usuários utiliza exclusivamente hashes Bcrypt no campo `password_hash`. Senhas do legado nunca são migradas em texto plano.
+* **Isolamento de Credenciais:** Nenhuma senha, token ou URL de produção é versionada no repositório Git.
 
-```sql
-SELECT *
-FROM migration_error
-ORDER BY created_at DESC;
-```
+---
 
-### Validar consistência das coletas
+## Governança e Catálogo de Dados
 
-```sql
-WITH last_status AS (
-    SELECT DISTINCT ON (collection_id)
-        collection_id,
-        status
-    FROM collection_status
-    ORDER BY collection_id, changed_at DESC
-)
-SELECT
-    c.id,
-    c.current_status,
-    ls.status AS last_history_status
-FROM collection c
-LEFT JOIN last_status ls
-    ON ls.collection_id = c.id
-WHERE ls.status IS DISTINCT FROM c.current_status;
-```
+O script `scripts/10-data_catalog.sql` implementa um dicionário corporativo vivo dentro do PostgreSQL. Cada tabela e atributo é classificado segundo os níveis de privacidade em conformidade com a LGPD:
 
-O resultado esperado é vazio.
-
-### Validar métricas ESG
-
-```sql
-SELECT
-    id,
-    company_id,
-    total_waste_kg,
-    total_recycled_kg
-FROM esg_metric
-WHERE total_recycled_kg > total_waste_kg;
-```
-
-O resultado esperado é vazio.
-
-## Decisões de modelagem
-
-### UUIDs
-
-Todas as entidades do modelo atual utilizam UUID como chave primária.
-
-Isso permite geração descentralizada de identificadores e evita dependência de sequências numéricas globais.
-
-### Integridade referencial
-
-Chaves estrangeiras conectam as entidades e impedem referências inválidas.
-
-### Histórico de coleta
-
-`collection.current_status` mantém o estado operacional atual.
-
-`collection_status` preserva o histórico de alterações.
-
-### Indicadores ESG
-
-`esg_metric` mantém medições históricas por empresa e período.
-
-### Roles e usuários
-
-As roles mantidas no schema são `ADMIN`, `MANAGER` e `EMPLOYEE`. A role `OPERATOR` foi descontinuada por não apresentar diferenças funcionais relevantes em relação a `EMPLOYEE`; os usuários anteriormente associados a `OPERATOR` foram migrados para `EMPLOYEE`. Os scripts `schema.sql` e `dataload.sql` foram atualizados para não recriar a role removida.
-
-> A remoção da role no banco de dados não substitui a revisão das regras de autorização na API. O código da aplicação deve refletir as roles atualmente suportadas.
-
-### Separação de responsabilidades
-
-O PostgreSQL mantém o modelo relacional principal.
-
-MongoDB é utilizado no domínio de conversas.
-
-Redis é utilizado como camada de consulta rápida/ranking.
-
-### Evolução do schema
-
-Alterações compartilhadas no banco devem ser realizadas por novos scripts versionados quando for necessário preservar o histórico da evolução, evitando alterações silenciosas em scripts já utilizados por outros ambientes.
-
-## MongoDB
-
-O projeto utiliza MongoDB para persistência das funcionalidades conversacionais do VOLTA.
-
-Para desenvolvimento local, uma instância do MongoDB pode ser executada através do Docker Compose. A configuração utiliza o database `volta_chat` e executa automaticamente o script `scripts/mongodb/init-chat.js` durante a inicialização.
-
-O script é responsável pela criação das collections e estruturas necessárias:
-
-```text
-volta_chat
-├── sessions
-└── messages
-```
-
-Também são configurados os seguintes índices:
-
-- `idx_messages_session_created`: índice composto utilizando `session_id` e `created_at`, utilizado na consulta do histórico de mensagens;
-- `idx_sessions_expires_ttl`: índice TTL sobre `expires_at`, responsável pela remoção automática de sessões expiradas.
-
-### Executar localmente
-
-Configure as variáveis de ambiente utilizando o `.env.example` e execute:
-
-```bash
-docker compose up -d
-```
-
-Por padrão, o ambiente local do VOLTA disponibiliza o MongoDB através da porta:
-
-```text
-localhost:27018
-```
-
-Para verificar o container:
-
-```bash
-docker compose ps
-```
-
-Para acompanhar a inicialização:
-
-```bash
-docker logs volta-mongo
-```
-
-> O ambiente Docker é destinado ao desenvolvimento e validação local. Credenciais reais não devem ser versionadas no repositório.
-
-## Segurança
-
-- Nunca versione senhas, tokens ou URLs contendo credenciais.
-- Nunca versione arquivos `.env`.
-- Utilize `.env.example` apenas com placeholders.
-- Utilize credenciais diferentes para desenvolvimento, teste e produção.
-- Não execute o dataload em produção.
-- Não copie senhas em texto puro do legado para o banco atual.
-- Restrinja o acesso aos bancos apenas aos ambientes necessários.
-- Faça backup antes de alterações destrutivas.
-- Revise os arquivos adicionados antes de cada commit.
-- Não exponha PostgreSQL, MongoDB ou Redis diretamente à internet sem necessidade e proteção adequada.
-
-## Contribuição
-
-1. Crie uma branch a partir da branch de integração utilizada pelo projeto.
-2. Implemente a alteração.
-3. Teste em ambiente isolado.
-4. Atualize a documentação quando necessário.
-5. Revise os arquivos modificados.
-6. Confirme que nenhuma credencial foi adicionada.
-7. Abra um Pull Request descrevendo:
-   - o que foi alterado;
-   - como foi validado;
-   - impactos conhecidos;
-   - estratégia de rollback, quando aplicável.
+* `PUBLIC`: Dados institucionais e categorias abertas;
+* `INTERNAL`: Metadados operacionais e identificadores técnicos;
+* `SENSITIVE`: Informações de identificação pessoal (PII) e localizações físicas;
+* `RESTRICTED`: Hashes de credenciais e dados confidenciais de transação.
