@@ -1,5 +1,7 @@
+
 -- ============================================================
--- VOLTA - PostgreSQL - CREATES e  ALTERS/CONSTRAINTS
+-- VOLTA - PostgreSQL
+-- Schema definitivo consolidado
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -12,8 +14,11 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS company (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(150) NOT NULL,
-    cnpj VARCHAR(14) NOT NULL UNIQUE,
-    address VARCHAR(255) NOT NULL
+    cnpj VARCHAR(18) NOT NULL UNIQUE,
+    address VARCHAR(255) NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    is_available BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 
@@ -28,30 +33,77 @@ CREATE TABLE IF NOT EXISTS role (
 
 
 -- ============================================================
--- 3. USERS
+-- 3. COOPERATIVE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS cooperative (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(150) NOT NULL,
+    cnpj VARCHAR(18) NOT NULL UNIQUE,
+    email VARCHAR(150) NOT NULL,
+    latitude DECIMAL(9,6),
+    longitude DECIMAL(9,6),
+    average_rating DECIMAL(3,2) DEFAULT 0,
+    specialties VARCHAR(500),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_cooperative_latitude
+        CHECK (latitude IS NULL OR latitude BETWEEN -90 AND 90),
+
+    CONSTRAINT chk_cooperative_longitude
+        CHECK (longitude IS NULL OR longitude BETWEEN -180 AND 180),
+
+    CONSTRAINT chk_cooperative_rating
+        CHECK (average_rating BETWEEN 0 AND 5)
+);
+
+
+-- ============================================================
+-- 4. USERS
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    company_id UUID NOT NULL,
+    company_id UUID,
+    cooperative_id UUID,
     role_id UUID NOT NULL,
     name VARCHAR(150) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     position VARCHAR(100),
+    photo_url VARCHAR(2048),
+    registered_at DATE,
+    first_login BOOLEAN,
 
     CONSTRAINT fk_users_company
         FOREIGN KEY (company_id)
         REFERENCES company(id),
 
+    CONSTRAINT fk_users_cooperative
+        FOREIGN KEY (cooperative_id)
+        REFERENCES cooperative(id),
+
     CONSTRAINT fk_users_role
         FOREIGN KEY (role_id)
-        REFERENCES role(id)
+        REFERENCES role(id),
+
+    CONSTRAINT chk_users_organization
+        CHECK (
+            (
+                company_id IS NOT NULL
+                AND cooperative_id IS NULL
+            )
+            OR
+            (
+                company_id IS NULL
+                AND cooperative_id IS NOT NULL
+            )
+        )
 );
 
 
 -- ============================================================
--- 4. AREA
+-- 5. AREA
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS area (
@@ -67,7 +119,7 @@ CREATE TABLE IF NOT EXISTS area (
 
 
 -- ============================================================
--- 5. WASTE TYPE
+-- 6. WASTE TYPE
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS waste_type (
@@ -79,7 +131,7 @@ CREATE TABLE IF NOT EXISTS waste_type (
 
 
 -- ============================================================
--- 6. INCIDENT
+-- 7. INCIDENT
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS incident (
@@ -87,7 +139,6 @@ CREATE TABLE IF NOT EXISTS incident (
     company_id UUID NOT NULL,
     user_id UUID NOT NULL,
     area_id UUID NOT NULL,
-    waste_type_id UUID,
     photo_url VARCHAR(500),
     employee_description TEXT NOT NULL,
     contamination_level VARCHAR(50),
@@ -95,6 +146,11 @@ CREATE TABLE IF NOT EXISTS incident (
     priority VARCHAR(30) NOT NULL,
     status VARCHAR(50) NOT NULL,
     registered_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ai_description TEXT,
+    title VARCHAR(100),
+    change_reason VARCHAR(200),
+    reviewed_by UUID,
+    reviewed_at TIMESTAMP,
 
     CONSTRAINT fk_incident_company
         FOREIGN KEY (company_id)
@@ -108,9 +164,9 @@ CREATE TABLE IF NOT EXISTS incident (
         FOREIGN KEY (area_id)
         REFERENCES area(id),
 
-    CONSTRAINT fk_incident_waste_type
-        FOREIGN KEY (waste_type_id)
-        REFERENCES waste_type(id),
+    CONSTRAINT fk_incident_reviewed_by
+        FOREIGN KEY (reviewed_by)
+        REFERENCES users(id),
 
     CONSTRAINT chk_incident_quantity
         CHECK (
@@ -121,7 +177,7 @@ CREATE TABLE IF NOT EXISTS incident (
 
 
 -- ============================================================
--- 7. AI REPORT
+-- 8. AI REPORT
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS ai_report (
@@ -140,7 +196,7 @@ CREATE TABLE IF NOT EXISTS ai_report (
 
 
 -- ============================================================
--- 8. ATTACHMENT
+-- 9. ATTACHMENT
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS attachment (
@@ -152,30 +208,6 @@ CREATE TABLE IF NOT EXISTS attachment (
     CONSTRAINT fk_attachment_incident
         FOREIGN KEY (incident_id)
         REFERENCES incident(id)
-);
-
-
--- ============================================================
--- 9. COOPERATIVE
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS cooperative (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(150) NOT NULL,
-    cnpj VARCHAR(14) NOT NULL UNIQUE,
-    latitude DECIMAL(9,6) NOT NULL,
-    longitude DECIMAL(9,6) NOT NULL,
-    average_rating DECIMAL(3,2) DEFAULT 0,
-    specialties VARCHAR(500),
-
-    CONSTRAINT chk_cooperative_latitude
-        CHECK (latitude BETWEEN -90 AND 90),
-
-    CONSTRAINT chk_cooperative_longitude
-        CHECK (longitude BETWEEN -180 AND 180),
-
-    CONSTRAINT chk_cooperative_rating
-        CHECK (average_rating BETWEEN 0 AND 5)
 );
 
 
@@ -350,6 +382,12 @@ CREATE TABLE IF NOT EXISTS esg_metric (
     total_recycled_kg DECIMAL(14,2) NOT NULL DEFAULT 0,
     recycling_percentage DECIMAL(5,2) NOT NULL DEFAULT 0,
     calculated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    weekly_target NUMERIC(12,2),
+    weekly_date DATE,
+    monthly_target NUMERIC(12,2),
+    monthly_date DATE,
+    quarterly_target NUMERIC(12,2),
+    quarterly_date DATE,
 
     CONSTRAINT fk_esg_metric_company
         FOREIGN KEY (company_id)
@@ -368,49 +406,10 @@ CREATE TABLE IF NOT EXISTS esg_metric (
         CHECK (total_recycled_kg <= total_waste_kg)
 );
 
-ALTER TABLE company
-ALTER COLUMN cnpj TYPE VARCHAR(18);
-
-ALTER TABLE cooperative
-ALTER COLUMN cnpj TYPE VARCHAR(18);
-
-ALTER TABLE company
-ADD COLUMN is_available BOOLEAN NOT NULL DEFAULT TRUE;
-
-ALTER TABLE users
-ALTER COLUMN company_id DROP NOT NULL;
-
-ALTER TABLE users
-ADD COLUMN cooperative_id UUID;
-
-ALTER TABLE users
-ADD CONSTRAINT fk_users_cooperative
-FOREIGN KEY (cooperative_id)
-REFERENCES cooperative(id);
-
-ALTER TABLE users
-ADD CONSTRAINT chk_users_organization
-CHECK (
-    (
-        company_id IS NOT NULL
-        AND cooperative_id IS NULL
-    )
-    OR
-    (
-        company_id IS NULL
-        AND cooperative_id IS NOT NULL
-    )
-);
-
-ALTER TABLE company
-ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
-
-ALTER TABLE company
-ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
 -- ============================================================
--- 18. COOPERATIVE_WASTE_TYPE
--- Relaciona cooperativas aos tipos de residuos que aceitam.
+-- 18. COOPERATIVE WASTE TYPE
+-- Relaciona cooperativas aos tipos de resíduos aceitos.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS cooperative_waste_type (
@@ -429,35 +428,25 @@ CREATE TABLE IF NOT EXISTS cooperative_waste_type (
         REFERENCES waste_type(id)
 );
 
-UPDATE waste_type
-SET category = CASE category
-    WHEN 'PLASTIC'     THEN 'PLASTICO'
-    WHEN 'PAPER'       THEN 'PAPEL'
-    WHEN 'GLASS'       THEN 'VIDRO'
-    WHEN 'METAL'       THEN 'METAL'
-    WHEN 'ORGANIC'     THEN 'ORGANICO'
-    WHEN 'ELECTRONIC'  THEN 'ELETRONICO'
-    WHEN 'CHEMICAL'    THEN 'QUIMICO'
-    WHEN 'TEXTILE'     THEN 'TEXTIL'
-    WHEN 'WOOD'        THEN 'MADEIRA'
-    WHEN 'MIXED'       THEN 'MISTO'
-    ELSE category
-END
-WHERE category IN (
-    'PLASTIC', 'PAPER', 'GLASS', 'METAL', 'ORGANIC',
-    'ELECTRONIC', 'CHEMICAL', 'TEXTILE', 'WOOD', 'MIXED'
+
+-- ============================================================
+-- 19. INCIDENT WASTE TYPE
+-- Relaciona ocorrências aos tipos de resíduos identificados.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS incident_waste_type (
+    incident_id UUID NOT NULL,
+    waste_type_id UUID NOT NULL,
+
+    CONSTRAINT pk_incident_waste_type
+        PRIMARY KEY (incident_id, waste_type_id),
+
+    CONSTRAINT fk_iwt_incident
+        FOREIGN KEY (incident_id)
+        REFERENCES incident(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_iwt_waste_type
+        FOREIGN KEY (waste_type_id)
+        REFERENCES waste_type(id)
 );
-
-UPDATE users
-SET role_id = 'cfdfa46f-dc1e-4442-bf2e-1d0a307edfa8'
-WHERE role_id = '91a5199b-8722-45ff-997a-d065d456f935';
-
-DELETE FROM role
-WHERE id = '91a5199b-8722-45ff-997a-d065d456f935'
-  AND type = 'OPERATOR';
-
-ALTER TABLE users
-ADD COLUMN photo_url VARCHAR(2048);
-
-ALTER TABLE incident
-ADD COLUMN ai_description TEXT;

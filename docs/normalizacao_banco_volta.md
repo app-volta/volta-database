@@ -2,739 +2,250 @@
 
 ## 1. Objetivo
 
-A normalização do banco de dados do projeto **VOLTA** tem como objetivo organizar as informações de forma estruturada, reduzir redundâncias e evitar anomalias relacionadas à inserção, atualização e exclusão de dados.
+A normalização do banco de dados do projeto **VOLTA** tem como objetivo organizar as informações de forma estruturada, reduzir redundâncias e evitar anomalias de inserção, atualização e exclusão de dados.
 
-O banco de dados relacional foi modelado utilizando o PostgreSQL e estruturado considerando as três primeiras formas normais:
+O banco de dados relacional foi modelado utilizando o PostgreSQL e estruturado rigorosamente em conformidade com as três primeiras formas normais:
 
-- Primeira Forma Normal — **1FN**;
-- Segunda Forma Normal — **2FN**;
-- Terceira Forma Normal — **3FN**.
+* Primeira Forma Normal — **1FN**;
+* Segunda Forma Normal — **2FN**;
+* Terceira Forma Normal — **3FN**.
 
-A modelagem é composta pelas entidades:
+A modelagem física consolidada é composta por 19 tabelas:
 
-- `company`
-- `role`
-- `users`
-- `area`
-- `waste_type`
-- `incident`
-- `ai_report`
-- `attachment`
-- `cooperative`
-- `cooperative_waste_type`<small></small>
-- `collection`
-- `collection_status`
-- `review`
-- `conversation`
-- `message`
-- `message_attachment`
-- `notification`
-- `esg_metric`
-
----
-
-# 2. Primeira Forma Normal — 1FN
-
-A **Primeira Forma Normal (1FN)** estabelece que os dados devem ser organizados de forma que:
-
-- cada tabela possua uma identificação para seus registros;
-- cada atributo armazene um valor individual;
-- não existam grupos repetitivos de informações.
-
-No VOLTA, todas as entidades possuem um campo `id` utilizado como chave primária. Os identificadores utilizam o tipo `UUID`.
-
-**Exceção — chave primária composta:** a tabela `cooperative_waste_type` não possui uma coluna `id` própria. Sua chave primária é composta pelos campos `cooperative_id` e `waste_type_id`, ambos do tipo `UUID`. Essa estrutura identifica unicamente cada associação entre uma cooperativa e um tipo de resíduo.
-
-## Exemplo: Company
-
-```Markdown
-company
-
-id
-name
-cnpj
-address
-```
-
-Cada atributo possui uma finalidade específica:
-
-| Atributo    | Informação                    |
-| ----------- | ------------------------------- |
-| `id`      | Identificador único da empresa |
-| `name`    | Nome da empresa                 |
-| `cnpj`    | CNPJ da empresa                 |
-| `address` | Endereço da empresa            |
-
-Não existe, por exemplo, um único campo contendo múltiplas empresas ou diversos CNPJs.
-
-## Aplicação da 1FN no VOLTA
-
-A Primeira Forma Normal é atendida através de:
-
-- utilização de uma chave primária em cada tabela;
-- uso de UUIDs como identificadores;
-- separação dos atributos em campos específicos;
-- ausência de grupos repetitivos dentro das entidades;
-- armazenamento individual das informações.
-
-Outro exemplo é a tabela `attachment`.
-
-```Markdown
-attachment
-
-id
-incident_id
-file_url
-file_type
-```
-
-Em vez de armazenar diversos arquivos dentro de uma única ocorrência utilizando campos repetidos, cada anexo possui seu próprio registro.
-
-Dessa forma, uma ocorrência pode possuir vários anexos sem a necessidade de criar grupos repetitivos de atributos.
+1. `company`
+2. `role`
+3. `cooperative`
+4. `users`
+5. `area`
+6. `waste_type`
+7. `incident`
+8. `ai_report`
+9. `attachment`
+10. `collection`
+11. `collection_status`
+12. `review`
+13. `conversation`
+14. `message`
+15. `message_attachment`
+16. `notification`
+17. `esg_metric`
+18. `cooperative_waste_type` (Associativa N:N)
+19. `incident_waste_type` (Associativa N:N)
 
 ---
 
-# 3. Segunda Forma Normal — 2FN
+## 2. Primeira Forma Normal — 1FN
 
-A **Segunda Forma Normal (2FN)** estabelece que uma tabela deve:
+A **Primeira Forma Normal (1FN)** estabelece que:
 
-1. estar na Primeira Forma Normal;
-2. possuir atributos não-chave dependentes completamente da chave primária.
+* Cada tabela possua uma chave primária que identifique univocamente seus registros;
+* Cada atributo seja atômico (indivisível), armazenando apenas um único valor por linha/coluna;
+* Não existam grupos repetitivos de atributos ou arrays multivalorados em colunas.
 
-No banco do VOLTA, as tabelas utilizam uma chave primária individual (`id`). Isso contribui para que os atributos de cada entidade estejam relacionados ao registro identificado pelo seu UUID.
+No VOLTA, todas as entidades regulares possuem um campo `id` do tipo `UUID` gerado automaticamente (`gen_random_uuid()`) como chave primária.
 
-A tabela `cooperative_waste_type` utiliza uma chave primária composta. Como seus dois campos são chaves estrangeiras e não existem atributos não-chave nessa tabela, não há dependências parciais de atributos não-chave em relação à chave primária composta.
+### Chaves Primárias Compostas (Tabelas Associativas N:N)
 
-## Exemplo: Users
+As tabelas associativas `cooperative_waste_type` e `incident_waste_type` não utilizam um identificador artificial unitário. Suas chaves primárias são compostas pelos pares de chaves estrangeiras:
 
-A tabela `users` possui a seguinte estrutura conceitual:
+* `cooperative_waste_type`: PK `(cooperative_id, waste_type_id)`
+* `incident_waste_type`: PK `(incident_id, waste_type_id)`
 
-```Markdown
-users
-
-id
-company_id
-role_id
-name
-email
-passooword_hash
-position
-```
-
-O registro é identificado por `id`.
-
-As informações `name`, `email`, `password_hash` e `position` pertencem especificamente ao usuário identificado pelo UUID.
-
-As informações da empresa não são armazenadas diretamente nessa tabela. Por exemplo, a tabela `users` não possui:
-
-```Markdown
-company_name
-company_cnpj
-company_address
-```
-
-Essas informações pertencem à entidade `company`. A relação é realizada através de `company_id`.
-
-Da mesma forma, o papel do usuário é associado à tabela `role` através do campo `role_id`.
-
-Essa separação reduz a repetição de dados.
-
-## Exemplo: Area
-
-A tabela `area` possui:
-
-```Markdown
-area
-
-id
-company_id
-sector_name
-location_description
-```
-
-As informações relacionadas à empresa não são repetidas dentro da tabela `area`. A relação é feita através de `company_id`.
-
-Isso permite que uma empresa possua diversas áreas:
-
-```Markdown
-Company
-    │
-    ├── Area 1
-    ├── Area 2
-    └── Area 3
-```
-
-Assim, os dados da empresa permanecem centralizados em `company`.
-
-## Aplicação da 2FN no VOLTA
-
-A Segunda Forma Normal é atendida através de:
-
-- utilização de chaves primárias individuais;
-- dependência dos atributos em relação ao registro identificado pelo `id`;
-- separação das entidades;
-- utilização de chaves estrangeiras;
-- redução da duplicação de informações entre tabelas.
-
----
-
-# 4. Terceira Forma Normal — 3FN
-
-A **Terceira Forma Normal (3FN)** estabelece que:
-
-1. a tabela esteja na 2FN;
-2. atributos não-chave não dependam de outros atributos não-chave.
-
-Em outras palavras, informações que possuem uma identidade própria devem ser armazenadas em entidades separadas.
-
-No VOLTA, essa separação pode ser observada em diversas partes da modelagem.
-
----
-
-# 5. Aplicação da 3FN no VOLTA
-
-## 5.1 Company e Users
-
-Seria inadequado armazenar todas as informações dos usuários dentro da tabela `company`.
-
-Um modelo não normalizado poderia ser:
+### Exemplo: Company
 
 ```text
 company
-
-company_id
-company_name
-cnpj
-user_name
-user_email
-user_position
+├── id (UUID, PK)
+├── name (VARCHAR)
+├── cnpj (VARCHAR)
+├── address (VARCHAR)
+├── latitude (DOUBLE PRECISION)
+├── longitude (DOUBLE PRECISION)
+└── is_available (BOOLEAN)
 ```
 
-Isso causaria repetição das informações da empresa para cada usuário.
+Cada atributo possui atomicidade:
 
-No VOLTA, as informações foram separadas:
+| Atributo                     | Finalidade                                   |
+| :--------------------------- | :------------------------------------------- |
+| `id`                       | Identificador único da empresa (UUID)       |
+| `name`                     | Razão Social / Nome da empresa              |
+| `cnpj`                     | Cadastro Nacional da Pessoa Jurídica        |
+| `address`                  | Endereço formatado                          |
+| `latitude` / `longitude` | Coordenadas geográficas individuais         |
+| `is_available`             | Flag booleana de disponibilidade operacional |
 
-```text
-company
+### Eliminação de Grupos Repetitivos
 
-id
-name
-cnpj
-address
-```
+Em vez de criar colunas fixas como `waste_type_1`, `waste_type_2` na tabela `incident`, ou armazenar strings com resíduos concatenados por vírgula (`"Plástico, Vidro, Metal"`), cada associação é decomposta em linhas individuais na tabela associativa `incident_waste_type`. O mesmo princípio é aplicado para múltiplos anexos (`attachment`) vinculados a uma única ocorrência.
+
+---
+
+## 3. Segunda Forma Normal — 2FN
+
+A **Segunda Forma Normal (2FN)** exige que:
+
+1. A entidade já esteja em conformidade com a 1FN;
+2. Todos os atributos não-chave dependam funcionalmente e por completo da chave primária (ausência de dependência parcial).
+
+Nas tabelas com chave primária simples (`id`), a 2FN é garantida por definição, pois qualquer atributo não-chave depende diretamente do UUID do registro.
+
+Nas tabelas com chave primária composta:
+
+* Em `cooperative_waste_type`, todos os campos compõem a própria chave primária `(cooperative_id, waste_type_id)`. Não há atributos satélites não-chave, garantindo dependência plena.
+* Em `incident_waste_type`, a chave é estritamente composta por `(incident_id, waste_type_id)`.
+
+### Exemplo: Users
+
+A tabela `users` centraliza credenciais e identidade:
 
 ```text
 users
-
-id
-company_id
-role_id
-name
-email
-password_hash
-position
+├── id (PK)
+├── role_id (FK)
+├── company_id (FK, Opcional)
+├── cooperative_id (FK, Opcional)
+├── name
+├── email
+├── password_hash
+├── position
+├── photo_url
+├── registered_at
+└── first_login
 ```
 
-A relação ocorre através de:
-
-```text
-users.company_id → company.id
-```
-
-Dessa forma, as informações da empresa permanecem centralizadas em sua própria entidade.
+Atributos como `name`, `email` e `password_hash` dependem exclusivamente da pessoa física cadastrada (`id`). Dados cadastrais da empresa contratante ou da cooperativa parceira não são repetidos em `users`; utiliza-se apenas a referência (`company_id` ou `cooperative_id`).
 
 ---
 
-## 5.2 Users e Role
+## 4. Terceira Forma Normal — 3FN
 
-Os papéis dos usuários foram separados na tabela `role`.
+A **Terceira Forma Normal (3FN)** exige que:
 
-```text
-role
+1. A tabela atenda a todos os requisitos da 2FN;
+2. Não existam dependências transitivas entre atributos não-chave (ou seja, nenhum atributo não-chave pode depender de outro atributo não-chave).
 
-id
-type
-```
-
-A tabela `users` possui apenas a referência `role_id`.
-
-A relação é:
-
-```text
-users.role_id → role.id
-```
-
-Essa separação evita a necessidade de repetir informações relacionadas aos papéis dos usuários.
-
-Vários usuários podem estar associados a um mesmo papel.
+Informações que possuem ciclo de vida e identidade próprios foram isoladas em tabelas dedicadas.
 
 ---
 
-## 5.3 Company e Area
+## 5. Aplicação Prática da 3FN no VOLTA
 
-As áreas operacionais foram separadas da entidade `company`.
+### 5.1 Company e Users
 
-A tabela `company` armazena os dados gerais da empresa.
+Evita que dados corporativos sejam replicados em cada registro de usuário.
 
-Já a tabela `area` armazena:
+* **Modelo Não Normalizado:** `users (id, name, company_name, company_cnpj, company_address)`
+* **No VOLTA (3FN):** `users (id, company_id, ...) → company (id, name, cnpj, address)`
 
-```text
-id
-company_id
-sector_name
-location_description
+### 5.2 Users e Role
+
+As permissões e cargos foram extraídos para a tabela `role` (`ADMIN`, `MANAGER`, `EMPLOYEE`), evitando inconsistências de escrita e permitindo auditoria centralizada.
+
+* `users.role_id → role.id`
+
+### 5.3 Vínculo Organizacional Exclusivo
+
+Um usuário do sistema pertence ou a uma empresa geradora ou a uma cooperativa de reciclagem. Em vez de criar tabelas duplicadas para cada tipo de usuário, a tabela `users` implementa a constraint de integridade:
+
+```sql
+CONSTRAINT chk_users_organization CHECK (
+    (company_id IS NOT NULL AND cooperative_id IS NULL)
+    OR
+    (company_id IS NULL AND cooperative_id IS NOT NULL)
+)
 ```
 
-A relação é:
+### 5.4 Incident, Waste Type e Incident Waste Type
 
-```text
-area.company_id → company.id
-```
+Um chamado/incidente pode envolver diferentes categorias de resíduos. Para evitar redundância transitiva e permitir flexibilidade na triagem:
 
-Uma empresa pode possuir diversas áreas operacionais.
+* `incident`: Detalhes da ocorrência (local, gravidade, descrição, fotos).
+* `waste_type`: Cadastro mestre das categorias de resíduos e riscos ambientais.
+* `incident_waste_type`: Tabela associativa que resolve a relação N:N (`incident_id` + `waste_type_id`).
 
-Essa estrutura evita a repetição de informações da empresa para cada área.
+### 5.5 Cooperative e Cooperative Waste Type
+
+Similarmente, cada cooperativa atua com materiais específicos. A associação muitos-para-muitos é resolvida pela tabela `cooperative_waste_type`:
+
+* `cooperative.id ← cooperative_waste_type.cooperative_id`
+* `waste_type.id ← cooperative_waste_type.waste_type_id`
+
+### 5.6 Incident e AI Report
+
+Informações analíticas produzidas pelo modelo de Inteligência Artificial (`ai_contamination_level`, `recommendations`, `report_text`) possuem ciclo de processamento próprio e podem não existir no instante imediato da criação do chamado. Por isso, foram isoladas na tabela `ai_report`:
+
+* `ai_report.incident_id → incident.id` (Relacionamento 1:1 estrito).
+
+### 5.7 Collection e Collection Status (Histórico Auditável)
+
+Para rastrear a linha do tempo da coleta sem gerar linhas duplicadas para o agendamento:
+
+* `collection`: Registra o estado consolidado (`current_status`).
+* `collection_status`: Registra as transições cronológicas (`changed_at`, `status`, `observation`).
+* `collection_status.collection_id → collection.id` (1:N).
+
+### 5.8 Comunicação: Conversation, Message e Attachment
+
+O chat entre cooperativa e gerador foi decomposto em três camadas para garantir integridade e suporte a múltiplos anexos:
+
+* `conversation`: Contexto da negociação de uma coleta específica.
+* `message`: Registro das mensagens individuais enviadas pelos usuários.
+* `message_attachment`: Arquivos anexados a mensagens pontuais.
+
+### 5.9 ESG Metrics
+
+As metas e volumes consolidados de descarte e reciclagem variam por período (semanal, mensal, trimestral). Separar `esg_metric` de `company` impede que o cadastro da empresa precise ser alterado a cada novo cálculo de sustentabilidade.
 
 ---
 
-## 5.4 Incident e Waste Type
+## 6. Resumo das Formas Normais
 
-Os tipos de resíduos foram separados em uma entidade própria.
-
-```text
-waste_type
-
-id
-category
-description
-default_risk_level
-```
-
-A tabela `incident` possui apenas a referência `waste_type_id`.
-
-Relação:
-
-```text
-incident.waste_type_id → waste_type.id
-```
-
-Isso evita repetir informações sobre um mesmo tipo de resíduo em diversas ocorrências.
+| Forma Normal  | Regra Básica                                                   | Aplicação no Projeto VOLTA                                                                                |
+| :------------ | :-------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| **1FN** | Atributos atômicos e ausência de grupos repetitivos           | UUIDs como PKs; anexos e múltiplos resíduos desacoplados em tabelas associativas/filhas.                  |
+| **2FN** | Dependência funcional total da chave primária                 | Eliminação de dependências parciais; chaves compostas restritas a tabelas de ligação N:N.              |
+| **3FN** | Ausência de dependência transitiva entre atributos não-chave | Separação das entidades `company`, `role`, `cooperative`, `area`, `waste_type` e `ai_report`. |
 
 ---
 
-## 5.5 Cooperative e Waste Type
-
-Uma cooperativa pode aceitar vários tipos de resíduos, assim como um mesmo tipo de resíduo pode ser aceito por várias cooperativas. Essa relação é classificada como muitos-para-muitos (N:N).
-
-Para representar essa relação, o VOLTA utiliza a tabela intermediária `cooperative_waste_type`:
+## 7. Mapa de Relacionamentos do Sistema
 
 ```text
-cooperative_waste_type
+company (1) ──< area (N)
+company (1) ──< users (N)
+company (1) ──< incident (N)
+company (1) ──< conversation (N)
+company (1) ──< esg_metric (N)
 
-cooperative_id
-waste_type_id
+role (1) ──< users (N)
+
+cooperative (1) ──< users (N)
+cooperative (1) ──< collection (N)
+cooperative (1) ──< conversation (N)
+cooperative (1) ──< review (N)
+
+cooperative (N) >── cooperative_waste_type ──< (N) waste_type
+incident (N)    >── incident_waste_type    ──< (N) waste_type
+
+incident (1) ──< attachment (N)
+incident (1) ─── ai_report (1)
+incident (1) ──< collection (N)
+
+collection (1) ──< collection_status (N)
+collection (1) ──< review (N)
+collection (1) ──< conversation (N)
+
+conversation (1) ──< message (N) ──< message_attachment (N)
+users (1) ──< notification (N)
 ```
-
-Os campos são chaves estrangeiras que referenciam as tabelas correspondentes:
-
-```text
-cooperative_waste_type.cooperative_id → cooperative.id
-cooperative_waste_type.waste_type_id → waste_type.id
-```
-
-A chave primária composta por `(cooperative_id, waste_type_id)` impede a repetição da mesma associação.
-
-Essa estrutura permite relacionar cooperativas e tipos de resíduos de forma estruturada, sem depender exclusivamente do campo textual `specialties`, que continua existindo na tabela `cooperative`.
-
-<pre class="vditor-reset" placeholder="" contenteditable="true" spellcheck="false"><hr data-block="0" class=""/></pre>
-
-## 5.6 Incident e AI Report
-
-Os dados produzidos pela Inteligência Artificial foram separados da ocorrência.
-
-A tabela `incident` contém os dados principais da ocorrência.
-
-Já a tabela `ai_report` possui informações específicas da análise realizada pela IA:
-
-```text
-ai_report
-
-id
-incident_id
-detected_waste_type
-ai_contamination_level
-recommendations
-report_text
-generated_at
-```
-
-A relação é:
-
-```text
-ai_report.incident_id → incident.id
-```
-
-Essa separação evita que informações específicas do módulo de Inteligência Artificial sejam incorporadas diretamente à estrutura principal da ocorrência.
 
 ---
 
-## 5.7 Incident e Attachment
+## 8. Conclusão
 
-Os arquivos relacionados a uma ocorrência foram separados na tabela `attachment`.
+A normalização adotada na modelagem relacional do projeto **VOLTA** atende com rigor às exigências conceituais até a **3FN**. Essa arquitetura assegura:
 
-```text
-attachment
-
-id
-incident_id
-file_url
-file_type
-```
-
-Uma ocorrência pode possuir vários anexos:
-
-```text
-Incident
-    │
-    ├── Attachment 1
-    ├── Attachment 2
-    └── Attachment 3
-```
-
-Essa estrutura evita a criação de campos repetitivos como `attachment_1`, `attachment_2` e `attachment_3`.
-
----
-
-## 5.8 Collection e Collection Status
-
-O histórico dos status de uma coleta foi separado da tabela principal.
-
-A tabela `collection` armazena o status atual:
-
-```text
-collection
-
-current_status
-```
-
-Enquanto o histórico é armazenado em:
-
-```text
-collection_status
-
-id
-collection_id
-status
-changed_at
-observation
-```
-
-A relação é:
-
-```text
-collection_status.collection_id → collection.id
-```
-
-Exemplo de histórico:
-
-```text
-REQUESTED
-    ↓
-SCHEDULED
-    ↓
-IN_PROGRESS
-    ↓
-COMPLETED
-```
-
-Cada alteração pode ser registrada individualmente na tabela `collection_status`.
-
-### Observação
-
-O campo `current_status` representa o status atual da coleta, enquanto `collection_status` registra o histórico das alterações.
-
-Portanto, o sistema deve garantir que:
-
-> `current_status` corresponda ao último status registrado no histórico.
-
----
-
-## 5.9 Collection e Review
-
-As avaliações das cooperativas foram separadas das coletas.
-
-```text
-review
-
-id
-cooperative_id
-user_id
-collection_id
-stars
-comment
-reviewed_at
-```
-
-A tabela permite relacionar a cooperativa avaliada, o usuário responsável pela avaliação, a coleta relacionada, a quantidade de estrelas e o comentário.
-
-A separação evita que informações de avaliação sejam armazenadas diretamente na tabela `collection`.
-
----
-
-## 5.10 Conversation e Message
-
-As conversas e mensagens foram separadas.
-
-A entidade `conversation` representa uma conversa:
-
-```text
-conversation
-
-id
-company_id
-cooperative_id
-collection_id
-created_at
-```
-
-As mensagens são armazenadas separadamente:
-
-```text
-message
-
-id
-conversation_id
-user_id
-text
-reported
-sent_at
-```
-
-A relação é:
-
-```text
-message.conversation_id → conversation.id
-```
-
-Isso permite que uma conversa possua diversas mensagens.
-
----
-
-## 5.11 Message e Message Attachment
-
-Os arquivos enviados através das mensagens foram separados.
-
-```text
-message_attachment
-
-id
-message_id
-file_url
-file_type
-```
-
-Uma mensagem pode possuir diversos anexos relacionados através de `message_id`.
-
-Isso evita atributos repetitivos e mantém os anexos como registros independentes.
-
----
-
-## 5.12 Users e Notification
-
-As notificações foram modeladas como uma entidade independente.
-
-```text
-notification
-
-id
-user_id
-type
-title
-message
-read
-created_at
-```
-
-A relação:
-
-```text
-notification.user_id → users.id
-```
-
-permite que um usuário possua diversas notificações.
-
-As informações das notificações não precisam ser armazenadas diretamente na tabela `users`.
-
----
-
-## 5.13 Company e ESG Metric
-
-As métricas ESG foram separadas da entidade `company`.
-
-```text
-esg_metric
-
-id
-company_id
-period
-total_waste_kg
-total_recycled_kg
-recycling_percentage
-calculated_at
-```
-
-Uma empresa pode possuir diversas métricas calculadas em diferentes períodos.
-
-A relação é realizada através de `company_id`.
-
-Essa estrutura evita que métricas históricas sejam armazenadas diretamente na tabela da empresa.
-
----
-
-# 6. Resumo da Aplicação das Formas Normais
-
-| Forma Normal  | Aplicação no VOLTA                                                        |
-| ------------- | --------------------------------------------------------------------------- |
-| **1FN** | Cada tabela possui chave primária e atributos individuais                  |
-| **2FN** | Os atributos dependem completamente da identificação do registro          |
-| **3FN** | Entidades e informações relacionadas foram separadas em tabelas próprias |
-
----
-
-# 7. Principais Relações Normalizadas
-
-A estrutura do banco apresenta diversas relações entre entidades.
-
-```text
-Company
-   │
-   ├── Users
-   ├── Area
-   ├── Incident
-   ├── Conversation
-   └── ESG Metric
-```
-
-```text
-Role
-   │
-   └── Users
-```
-
-```text
-Waste Type
-   │
-   ├── Incident
-   └── Cooperative Waste Type ─── Cooperative
-```
-
-```text
-Incident
-   │
-   ├── AI Report
-   ├── Attachment
-   └── Collection
-```
-
-```text
-Collection
-   │
-   ├── Collection Status
-   ├── Review
-   └── Conversation
-```
-
-```text
-Conversation
-   │
-   └── Message
-          │
-          └── Message Attachment
-```
-
-Essa separação contribui para reduzir a duplicação e manter os dados organizados.
-
-A tabela `cooperative_waste_type` estabelece a relação muitos-para-muitos entre `cooperative` e `waste_type`, permitindo associar cada cooperativa aos tipos de resíduos que aceita.
-
----
-
-# 8. Benefícios da Normalização
-
-A aplicação das formas normais no banco de dados do VOLTA proporciona diversos benefícios.
-
-## Redução da Redundância
-
-As informações são armazenadas em suas respectivas entidades.
-
-Por exemplo:
-
-- empresas em `company`;
-- usuários em `users`;
-- papéis em `role`;
-- resíduos em `waste_type`;
-- ocorrências em `incident`.
-
-## Maior Consistência
-
-As relações são controladas através de chaves estrangeiras.
-
-Exemplo:
-
-```text
-users.company_id → company.id
-```
-
-Isso garante que os relacionamentos sejam realizados entre registros existentes.
-
-## Redução de Anomalias
-
-A separação das informações reduz problemas relacionados a:
-
-- inserção;
-- atualização;
-- exclusão.
-
-## Melhor Manutenção
-
-A divisão das entidades facilita a manutenção e evolução do banco.
-
-Novas funcionalidades podem ser adicionadas sem necessariamente modificar as estruturas já existentes.
-
-## Maior Organização
-
-Cada tabela possui uma responsabilidade específica.
-
-| Entidade              | Responsabilidade     |
-| --------------------- | -------------------- |
-| `company`           | Empresas             |
-| `users`             | Usuários            |
-| `incident`          | Ocorrências         |
-| `collection`        | Coletas              |
-| `collection_status` | Histórico de status |
-| `review`            | Avaliações         |
-| `esg_metric`        | Métricas ESG        |
-
----
-
-# 9. Conclusão
-
-O banco de dados relacional do projeto **VOLTA** foi estruturado considerando os princípios de normalização até a **Terceira Forma Normal (3FN)**.
-
-A aplicação da normalização permitiu separar adequadamente as entidades do sistema e estabelecer relações através de chaves estrangeiras.
-
-A **Primeira Forma Normal (1FN)** é atendida pela utilização de identificadores únicos e pela organização dos atributos em campos individuais.
-
-A **Segunda Forma Normal (2FN)** é atendida pela organização das entidades de forma que seus atributos estejam relacionados aos respectivos registros identificados pelas chaves primárias.
-
-A **Terceira Forma Normal (3FN)** é atendida pela separação das informações em entidades específicas, evitando que informações pertencentes a diferentes conceitos sejam armazenadas na mesma tabela.
-
-Dessa forma, a modelagem contribui para:
-
-- reduzir redundâncias;
-- melhorar a integridade dos dados;
-- facilitar a manutenção;
-- evitar anomalias;
-- organizar as relações entre entidades;
-- permitir a evolução futura do sistema.
-
-<pre class="vditor-reset" placeholder="" contenteditable="true" spellcheck="false"><hr data-block="0" class=""/></pre>
+1. **Integridade Referencial:** Todas as interações dependem de chaves estrangeiras validadas por constraints.
+2. **Eliminação de Anomalias:** Atualizações cadastrais em empresas ou cooperativas não corrompem o histórico de incidentes e relatórios de IA.
+3. **Escalabilidade:** Novas categorias de resíduos ou novos parâmetros de auditoria podem ser integrados sem necessidade de refatoração do esquema principal.

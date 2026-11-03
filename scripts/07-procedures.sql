@@ -1,5 +1,6 @@
 -- ============================================================
--- VOLTA - PROCEDURES
+-- VOLTA - PROCEDURES (Objetos Lógicos de Negócio)
+-- Atende ao requisito de SQL Avançado (Mínimo de 2 Procedures)
 -- ============================================================
 
 
@@ -10,7 +11,6 @@
 -- a alteração no histórico da tabela collection_status.
 --
 -- Exemplo:
---
 -- CALL update_collection_status(
 --     'UUID_DA_COLETA',
 --     'IN_PROGRESS',
@@ -26,16 +26,11 @@ CREATE OR REPLACE PROCEDURE update_collection_status(
 LANGUAGE plpgsql
 AS $$
 BEGIN
-
     -- Verifica se a coleta existe
     IF NOT EXISTS (
-        SELECT 1
-        FROM collection
-        WHERE id = p_collection_id
+        SELECT 1 FROM collection WHERE id = p_collection_id
     ) THEN
-        RAISE EXCEPTION
-            'Collection with id % not found.',
-            p_collection_id;
+        RAISE EXCEPTION 'Collection with id % not found.', p_collection_id;
     END IF;
 
     -- Atualiza o status atual
@@ -56,7 +51,6 @@ BEGIN
         CURRENT_TIMESTAMP,
         p_observation
     );
-
 END;
 $$;
 
@@ -64,18 +58,11 @@ $$;
 -- ============================================================
 -- 2. AGENDAR UMA COLETA
 -- ============================================================
--- Define uma data para a coleta e altera seu status para
--- SCHEDULED.
---
--- A procedure também registra a alteração em collection_status,
--- mantendo o histórico sincronizado com current_status.
+-- Define uma data para a coleta e altera seu status para SCHEDULED.
+-- Mantém o histórico sincronizado e respeita chk_collection_dates.
 --
 -- Exemplo:
---
--- CALL schedule_collection(
---     'UUID_DA_COLETA',
---     '2026-09-15 14:00:00'
--- );
+-- CALL schedule_collection('UUID_DA_COLETA', '2026-11-10 14:00:00');
 -- ============================================================
 
 CREATE OR REPLACE PROCEDURE schedule_collection(
@@ -87,27 +74,24 @@ AS $$
 DECLARE
     v_requested_at TIMESTAMP;
 BEGIN
-
-    -- Obtém a data em que a coleta foi solicitada
+    -- Obtém a data de solicitação da coleta
     SELECT requested_at
     INTO v_requested_at
     FROM collection
     WHERE id = p_collection_id;
 
     -- Verifica se a coleta existe
-    IF NOT FOUND THEN
-        RAISE EXCEPTION
-            'Collection with id % not found.',
-            p_collection_id;
+    IF v_requested_at IS NULL THEN
+        RAISE EXCEPTION 'Collection with id % not found.', p_collection_id;
     END IF;
 
-    -- Garante coerência com a constraint do schema
+    -- Garante coerência com a constraint chk_collection_dates
     IF p_scheduled_at < v_requested_at THEN
-        RAISE EXCEPTION
-            'Scheduled date cannot be earlier than requested date.';
+        RAISE EXCEPTION 'Scheduled date (%) cannot be earlier than requested date (%).',
+            p_scheduled_at, v_requested_at;
     END IF;
 
-    -- Atualiza a coleta
+    -- Atualiza o agendamento e o status da coleta
     UPDATE collection
     SET
         scheduled_at = p_scheduled_at,
@@ -125,9 +109,8 @@ BEGIN
         p_collection_id,
         'SCHEDULED',
         CURRENT_TIMESTAMP,
-        'Collection scheduled through procedure.'
+        'Agendamento efetuado via procedure schedule_collection.'
     );
-
 END;
 $$;
 
@@ -136,13 +119,10 @@ $$;
 -- 3. ENCERRAR UMA OCORRÊNCIA
 -- ============================================================
 -- Altera uma ocorrência para CLOSED e cria uma notificação
--- para o usuário responsável pelo registro.
+-- automática para o usuário responsável pelo registro.
 --
 -- Exemplo:
---
--- CALL close_incident(
---     'UUID_DA_OCORRENCIA'
--- );
+-- CALL close_incident('UUID_DA_OCORRENCIA');
 -- ============================================================
 
 CREATE OR REPLACE PROCEDURE close_incident(
@@ -153,7 +133,6 @@ AS $$
 DECLARE
     v_user_id UUID;
 BEGIN
-
     -- Localiza o usuário responsável pela ocorrência
     SELECT user_id
     INTO v_user_id
@@ -161,10 +140,8 @@ BEGIN
     WHERE id = p_incident_id;
 
     -- Verifica se a ocorrência existe
-    IF NOT FOUND THEN
-        RAISE EXCEPTION
-            'Incident with id % not found.',
-            p_incident_id;
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Incident with id % not found.', p_incident_id;
     END IF;
 
     -- Atualiza o status
@@ -185,11 +162,10 @@ BEGIN
         v_user_id,
         'INCIDENT',
         'Ocorrência encerrada',
-        'A ocorrência foi encerrada com sucesso.',
+        'A ocorrência foi encerrada com sucesso após triagem/coleta.',
         FALSE,
         CURRENT_TIMESTAMP
     );
-
 END;
 $$;
 
@@ -198,189 +174,43 @@ $$;
 -- CONSULTAS DE VALIDAÇÃO
 -- ============================================================
 
-
--- ============================================================
--- TESTE 1 - UPDATE COLLECTION STATUS
--- ============================================================
-
--- Exibe algumas coletas disponíveis
-SELECT
-    id,
-    current_status
-FROM collection
-LIMIT 5;
-
-
--- Busca dinamicamente uma coleta existente.
--- Caso não existam coletas no banco, o teste é ignorado.
+-- TESTE 1: update_collection_status
 DO $$
 DECLARE
     v_collection_id UUID;
 BEGIN
-
-    SELECT id
-    INTO v_collection_id
-    FROM collection
-    ORDER BY requested_at
-    LIMIT 1;
-
-    IF v_collection_id IS NULL THEN
-
-        RAISE NOTICE
-            'Teste update_collection_status ignorado: nenhuma coleta disponível.';
-
-    ELSE
-
+    SELECT id INTO v_collection_id FROM collection ORDER BY requested_at LIMIT 1;
+    IF v_collection_id IS NOT NULL THEN
         CALL update_collection_status(
             v_collection_id,
             'IN_PROGRESS',
-            'Coleta iniciada para teste.'
+            'Coleta em andamento (teste de procedure).'
         );
-
     END IF;
-
 END;
 $$;
 
-
--- Conferir coleta
-SELECT
-    id,
-    current_status
-FROM collection
-LIMIT 5;
-
-
--- Conferir histórico
-SELECT
-    collection_id,
-    status,
-    changed_at,
-    observation
-FROM collection_status
-ORDER BY changed_at DESC
-LIMIT 10;
-
-
--- ============================================================
--- TESTE 2 - SCHEDULE COLLECTION
--- ============================================================
-
-SELECT
-    id,
-    requested_at,
-    scheduled_at,
-    current_status
-FROM collection
-LIMIT 5;
-
-
--- Busca dinamicamente uma coleta existente.
--- A nova data é calculada a partir do requested_at,
--- evitando depender de datas fixas.
+-- TESTE 2: schedule_collection
 DO $$
 DECLARE
     v_collection_id UUID;
     v_requested_at TIMESTAMP;
 BEGIN
-
-    SELECT
-        id,
-        requested_at
-    INTO
-        v_collection_id,
-        v_requested_at
-    FROM collection
-    ORDER BY requested_at
-    LIMIT 1;
-
-    IF v_collection_id IS NULL THEN
-
-        RAISE NOTICE
-            'Teste schedule_collection ignorado: nenhuma coleta disponível.';
-
-    ELSE
-
-        CALL schedule_collection(
-            v_collection_id,
-            v_requested_at + INTERVAL '1 day'
-        );
-
+    SELECT id, requested_at INTO v_collection_id, v_requested_at FROM collection ORDER BY requested_at LIMIT 1;
+    IF v_collection_id IS NOT NULL THEN
+        CALL schedule_collection(v_collection_id, v_requested_at + INTERVAL '1 day');
     END IF;
-
 END;
 $$;
 
-
--- Conferir resultado
-SELECT
-    id,
-    requested_at,
-    scheduled_at,
-    current_status
-FROM collection
-LIMIT 5;
-
-
--- ============================================================
--- TESTE 3 - CLOSE INCIDENT
--- ============================================================
-
-SELECT
-    id,
-    user_id,
-    status
-FROM incident
-WHERE status <> 'CLOSED'
-LIMIT 5;
-
-
--- Busca dinamicamente uma ocorrência ainda não encerrada.
--- Caso nenhuma exista, o teste é ignorado.
+-- TESTE 3: close_incident
 DO $$
 DECLARE
     v_incident_id UUID;
 BEGIN
-
-    SELECT id
-    INTO v_incident_id
-    FROM incident
-    WHERE status <> 'CLOSED'
-    ORDER BY registered_at
-    LIMIT 1;
-
-    IF v_incident_id IS NULL THEN
-
-        RAISE NOTICE
-            'Teste close_incident ignorado: nenhuma ocorrência aberta disponível.';
-
-    ELSE
-
+    SELECT id INTO v_incident_id FROM incident WHERE status <> 'CLOSED' ORDER BY registered_at LIMIT 1;
+    IF v_incident_id IS NOT NULL THEN
         CALL close_incident(v_incident_id);
-
     END IF;
-
 END;
 $$;
-
-
--- Conferir ocorrência
-SELECT
-    id,
-    status
-FROM incident
-WHERE status = 'CLOSED'
-ORDER BY registered_at DESC
-LIMIT 10;
-
-
--- Conferir notificação criada
-SELECT
-    user_id,
-    type,
-    title,
-    message,
-    created_at
-FROM notification
-ORDER BY created_at DESC
-LIMIT 10;
